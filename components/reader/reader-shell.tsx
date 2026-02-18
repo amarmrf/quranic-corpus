@@ -50,7 +50,6 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 const WINDOW_SIZE = 8;
@@ -661,6 +660,22 @@ export function ReaderShell({ locationParam }: Props) {
     return null;
   }, [selectedToken, verses]);
 
+  const selectedTokenArabic = useMemo(() => {
+    if (selectedTokenData) {
+      return getArabicToken(selectedTokenData);
+    }
+
+    if (wordMorphology?.token) {
+      return getArabicToken(wordMorphology.token);
+    }
+
+    return "";
+  }, [selectedTokenData, wordMorphology]);
+
+  const selectedTokenGloss =
+    selectedTokenData?.translation || wordMorphology?.token.translation || "No gloss available.";
+  const selectedTokenPhonetic = selectedTokenData?.phonetic || wordMorphology?.token.phonetic || "";
+
   const jumpToSelectedToken = useCallback(() => {
     if (!selectedToken) {
       return;
@@ -1130,7 +1145,7 @@ export function ReaderShell({ locationParam }: Props) {
               <CardHeader>
                 <CardTitle className="text-base text-balance">Token analysis pane</CardTitle>
                 <CardDescription className="text-pretty">
-                  Inspect grammatical summaries, segment notes, and Arabic grammar per token.
+                  Compact view for token details, segments, and grammar.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 lg:overflow-y-auto">
@@ -1159,14 +1174,27 @@ export function ReaderShell({ locationParam }: Props) {
 
                 {selectedToken && (
                   <div className="space-y-3">
-                    <div className="rounded-md border p-3">
-                      <p className="text-xs text-muted-foreground">Selected location</p>
-                      <p className="text-sm font-semibold tabular-nums">{selectedToken.join(":")}</p>
-                      {selectedTokenData && (
-                        <p className="mt-1 text-sm text-muted-foreground text-pretty">
-                          {selectedTokenData.translation || "No gloss available."}
-                        </p>
+                    <div className="space-y-2 rounded-md border p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Selected location</p>
+                          <p className="text-sm font-semibold tabular-nums">{selectedToken.join(":")}</p>
+                        </div>
+                        {selectedTokenData && (
+                          <Badge variant="outline" className="tabular-nums">
+                            {selectedTokenData.segments.length} segments
+                          </Badge>
+                        )}
+                      </div>
+                      {selectedTokenArabic.length > 0 && (
+                        <p className="font-arabic text-2xl leading-none">{selectedTokenArabic}</p>
                       )}
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground text-pretty">{selectedTokenGloss}</p>
+                        {selectedTokenPhonetic.length > 0 && (
+                          <p className="text-xs text-muted-foreground text-pretty">{selectedTokenPhonetic}</p>
+                        )}
+                      </div>
                     </div>
 
                     {wordError && (
@@ -1189,40 +1217,39 @@ export function ReaderShell({ locationParam }: Props) {
                     {wordLoading && <WordSkeleton />}
 
                     {!wordLoading && wordMorphology && (
-                      <Tabs defaultValue="summary" className="space-y-3">
-                        <TabsList className="grid w-full grid-cols-3">
-                          <TabsTrigger value="summary">Summary</TabsTrigger>
-                          <TabsTrigger value="segments">Segments</TabsTrigger>
-                          <TabsTrigger value="grammar">Arabic Grammar</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="summary">
-                          <div className="rounded-md border p-3">
-                            <p className="text-sm text-pretty">{wordMorphology.summary}</p>
+                      <div className="overflow-hidden rounded-md border">
+                        <section className="space-y-1.5 p-3">
+                          <p className="text-xs text-muted-foreground">Summary</p>
+                          <p className="text-sm text-pretty">{wordMorphology.summary}</p>
+                        </section>
+                        <Separator />
+                        <section className="space-y-1.5 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs text-muted-foreground">Segments</p>
+                            <Badge variant="outline" className="tabular-nums">
+                              {wordMorphology.segmentDescriptions.length}
+                            </Badge>
                           </div>
-                        </TabsContent>
-                        <TabsContent value="segments">
-                          <div className="rounded-md border p-3">
-                            {wordMorphology.segmentDescriptions.length === 0 ? (
-                              <p className="text-sm text-muted-foreground text-pretty">
-                                Segment-level notes are not yet available for this token.
-                              </p>
-                            ) : (
-                              <ul className="space-y-2">
-                                {wordMorphology.segmentDescriptions.map((description) => (
-                                  <li key={description} className="text-sm text-pretty">
-                                    {description}
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        </TabsContent>
-                        <TabsContent value="grammar">
-                          <div className="rounded-md border p-3">
-                            <p className="text-sm text-pretty">{wordMorphology.arabicGrammar}</p>
-                          </div>
-                        </TabsContent>
-                      </Tabs>
+                          {wordMorphology.segmentDescriptions.length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-pretty">
+                              Segment-level notes are not yet available for this token.
+                            </p>
+                          ) : (
+                            <ul className="space-y-1.5">
+                              {wordMorphology.segmentDescriptions.map((description) => (
+                                <li key={description} className="text-sm text-pretty">
+                                  {description}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </section>
+                        <Separator />
+                        <section className="space-y-1.5 p-3">
+                          <p className="text-xs text-muted-foreground">Arabic grammar</p>
+                          <p className="text-sm text-pretty">{wordMorphology.arabicGrammar}</p>
+                        </section>
+                      </div>
                     )}
 
                     {selectedToken && (

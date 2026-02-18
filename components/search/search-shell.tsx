@@ -42,6 +42,14 @@ const MODE_OPTIONS: { value: SearchMode; label: string }[] = [
   { value: "translation", label: "Verse translation" },
 ];
 
+const SEARCH_EXAMPLE_QUERIES = ["house", "mercy", "forgiveness", "light"] as const;
+const DEFAULT_SEARCH_EXAMPLE = SEARCH_EXAMPLE_QUERIES[0];
+const DICTIONARY_ROOT_EXAMPLES = ["كتب", "ق د س", "ع ل م"] as const;
+const DICTIONARY_LEMMA_EXAMPLES = ["آدم", "البيت", "رحمة"] as const;
+const DEFAULT_DICTIONARY_ROOT_EXAMPLE = DICTIONARY_ROOT_EXAMPLES[0];
+const CONCORDANCE_EXAMPLE_QUERIES = ["mercy", "house", "light"] as const;
+const DEFAULT_CONCORDANCE_EXAMPLE = CONCORDANCE_EXAMPLE_QUERIES[0];
+
 const SORT_OPTIONS: { value: SearchSort; label: string }[] = [
   { value: "relevance", label: "Relevance" },
   { value: "location", label: "Location" },
@@ -60,6 +68,9 @@ export function SearchShell() {
   const urlSearchParams = useSearchParams();
   const { theme, toggleTheme } = useTheme();
   const headerRef = useRef<HTMLElement | null>(null);
+  const defaultSearchLoadedRef = useRef(false);
+  const defaultDictionaryLoadedRef = useRef(false);
+  const defaultConcordanceLoadedRef = useRef(false);
   const [showGuide, setShowGuide] = useLocalStorage<boolean>("qc.search.show-guide", true);
 
   const [activeTab, setActiveTab] = useState<ActiveTab>("search");
@@ -78,6 +89,7 @@ export function SearchShell() {
   const [searchSort, setSearchSort] = useState<SearchSort>("relevance");
   const [searchOffset, setSearchOffset] = useState(0);
   const [searchData, setSearchData] = useState<SearchResponse | null>(null);
+  const [activeExampleQuery, setActiveExampleQuery] = useState<string | null>(null);
 
   const [dictionaryType, setDictionaryType] = useState<DictionaryIndexType>("root");
   const [dictionaryStartsWith, setDictionaryStartsWith] = useState<(typeof ARABIC_LETTERS)[number]>("all");
@@ -87,11 +99,13 @@ export function SearchShell() {
   const [selectedDictionaryEntry, setSelectedDictionaryEntry] = useState("");
   const [dictionaryData, setDictionaryData] = useState<DictionaryResponse | null>(null);
   const [dictionaryOccurrences, setDictionaryOccurrences] = useState<ConcordanceResponse | null>(null);
+  const [activeDictionaryExample, setActiveDictionaryExample] = useState<string | null>(null);
 
   const [concordanceQuery, setConcordanceQuery] = useState("");
   const [concordanceMode, setConcordanceMode] = useState<SearchMode>("surface");
   const [concordanceGroupBy, setConcordanceGroupBy] = useState<SearchGroupBy>("none");
   const [concordanceData, setConcordanceData] = useState<ConcordanceResponse | null>(null);
+  const [activeConcordanceExample, setActiveConcordanceExample] = useState<string | null>(null);
 
   const [translations, setTranslations] = useState<Translation[]>([]);
   const [metadataError, setMetadataError] = useState<string | null>(null);
@@ -161,9 +175,22 @@ export function SearchShell() {
     [stickyPaneTop],
   );
 
+  const searchExampleSet = useMemo(
+    () => new Set(SEARCH_EXAMPLE_QUERIES.map((query) => query.toLowerCase())),
+    [],
+  );
+  const dictionaryExampleSet = useMemo<Set<string>>(
+    () => new Set([...DICTIONARY_ROOT_EXAMPLES, ...DICTIONARY_LEMMA_EXAMPLES]),
+    [],
+  );
+  const concordanceExampleSet = useMemo<Set<string>>(
+    () => new Set(CONCORDANCE_EXAMPLE_QUERIES),
+    [],
+  );
+
   const runSearch = useCallback(
-    async (nextOffset = 0) => {
-      const q = searchQuery.trim();
+    async (nextOffset = 0, explicitQuery?: string) => {
+      const q = (explicitQuery ?? searchQuery).trim();
       if (q.length === 0) {
         setError("Enter a query before searching.");
         return;
@@ -172,6 +199,10 @@ export function SearchShell() {
       setLoading(true);
       setError(null);
       try {
+        if (nextOffset === 0) {
+          setActiveExampleQuery(searchExampleSet.has(q.toLowerCase()) ? q : null);
+        }
+
         const next = await getSearch({
           q,
           mode: searchMode,
@@ -212,10 +243,39 @@ export function SearchShell() {
       searchMode,
       searchQuery,
       searchSort,
+      searchExampleSet,
       translation,
       urlSearchParams,
     ],
   );
+
+  useEffect(() => {
+    if (defaultSearchLoadedRef.current) {
+      return;
+    }
+
+    const initialQuery = urlSearchParams.get("q")?.trim() ?? "";
+    if (initialQuery.length > 0) {
+      return;
+    }
+
+    defaultSearchLoadedRef.current = true;
+    setSearchQuery(DEFAULT_SEARCH_EXAMPLE);
+    void runSearch(0, DEFAULT_SEARCH_EXAMPLE);
+  }, [runSearch, urlSearchParams]);
+
+  useEffect(() => {
+    setActiveDictionaryExample(null);
+  }, [dictionaryType]);
+
+  const dictionaryContainsExamples =
+    dictionaryType === "root" ? DICTIONARY_ROOT_EXAMPLES : DICTIONARY_LEMMA_EXAMPLES;
+  const dictionaryContainsPlaceholder = dictionaryType === "root"
+    ? "Filter roots (e.g., كتب or ق د س)"
+    : "Filter lemmas (e.g., آدم or البيت)";
+  const dictionaryStartsWithLabel =
+    dictionaryStartsWith === "all" ? "All letters" : `Letter ${dictionaryStartsWith}`;
+  const hasSharedFilters = exact || diacritics || chapter !== "all";
 
   const loadDictionaryIndex = useCallback(async () => {
     setLoading(true);
@@ -249,8 +309,9 @@ export function SearchShell() {
     }
   }, [activeTab, loadDictionaryIndex]);
 
-  const runDictionary = useCallback(async () => {
-    if (!selectedDictionaryEntry) {
+  const runDictionary = useCallback(async (explicitEntry?: string) => {
+    const dictionaryQuery = (explicitEntry ?? selectedDictionaryEntry).trim();
+    if (!dictionaryQuery) {
       setError("Pick a root/lemma entry first.");
       return;
     }
@@ -258,9 +319,11 @@ export function SearchShell() {
     setLoading(true);
     setError(null);
     try {
+      setActiveDictionaryExample(dictionaryExampleSet.has(dictionaryQuery) ? dictionaryQuery : null);
+
       const [details, occurrences] = await Promise.all([
         getDictionary({
-          q: selectedDictionaryEntry,
+          q: dictionaryQuery,
           mode: dictionaryType,
           translation,
           chapter: chapterNumber,
@@ -272,7 +335,7 @@ export function SearchShell() {
           groupBy: dictionaryType,
         }),
         getConcordance({
-          q: selectedDictionaryEntry,
+          q: dictionaryQuery,
           mode: dictionaryType,
           translation,
           chapter: chapterNumber,
@@ -293,10 +356,17 @@ export function SearchShell() {
     } finally {
       setLoading(false);
     }
-  }, [chapterNumber, dictionaryType, diacritics, selectedDictionaryEntry, translation]);
+  }, [
+    chapterNumber,
+    dictionaryExampleSet,
+    dictionaryType,
+    diacritics,
+    selectedDictionaryEntry,
+    translation,
+  ]);
 
-  const runConcordance = useCallback(async () => {
-    const q = concordanceQuery.trim();
+  const runConcordance = useCallback(async (explicitQuery?: string) => {
+    const q = (explicitQuery ?? concordanceQuery).trim();
     if (q.length === 0) {
       setError("Enter a concordance query.");
       return;
@@ -305,6 +375,8 @@ export function SearchShell() {
     setLoading(true);
     setError(null);
     try {
+      setActiveConcordanceExample(concordanceExampleSet.has(q) ? q : null);
+
       setConcordanceData(
         await getConcordance({
           q,
@@ -326,19 +398,42 @@ export function SearchShell() {
     } finally {
       setLoading(false);
     }
-  }, [chapterNumber, concordanceGroupBy, concordanceMode, concordanceQuery, diacritics, exact, translation]);
+  }, [
+    chapterNumber,
+    concordanceExampleSet,
+    concordanceGroupBy,
+    concordanceMode,
+    concordanceQuery,
+    diacritics,
+    exact,
+    translation,
+  ]);
+
+  useEffect(() => {
+    if (activeTab !== "dictionary" || defaultDictionaryLoadedRef.current) {
+      return;
+    }
+
+    defaultDictionaryLoadedRef.current = true;
+    setDictionaryType("root");
+    setDictionaryStartsWith("all");
+    setDictionaryContains(DEFAULT_DICTIONARY_ROOT_EXAMPLE);
+    setSelectedDictionaryEntry(DEFAULT_DICTIONARY_ROOT_EXAMPLE);
+    void runDictionary(DEFAULT_DICTIONARY_ROOT_EXAMPLE);
+  }, [activeTab, runDictionary]);
+
+  useEffect(() => {
+    if (activeTab !== "concordance" || defaultConcordanceLoadedRef.current) {
+      return;
+    }
+
+    defaultConcordanceLoadedRef.current = true;
+    setConcordanceQuery(DEFAULT_CONCORDANCE_EXAMPLE);
+    void runConcordance(DEFAULT_CONCORDANCE_EXAMPLE);
+  }, [activeTab, runConcordance]);
 
   const canLoadMoreSearch =
     searchData != null && searchData.results.length > 0 && searchData.results.length < searchData.total;
-  const dictionaryContainsExamples = dictionaryType === "root"
-    ? ["كتب", "ق د س", "ع ل م"]
-    : ["آدم", "البيت", "رحمة"];
-  const dictionaryContainsPlaceholder = dictionaryType === "root"
-    ? "Filter roots (e.g., كتب or ق د س)"
-    : "Filter lemmas (e.g., آدم or البيت)";
-  const dictionaryStartsWithLabel =
-    dictionaryStartsWith === "all" ? "All letters" : `Letter ${dictionaryStartsWith}`;
-  const hasSharedFilters = exact || diacritics || chapter !== "all";
 
   return (
     <div className="min-h-dvh bg-background pb-[calc(1rem+env(safe-area-inset-bottom))]">
@@ -389,7 +484,7 @@ export function SearchShell() {
 
       <main className="container py-4">
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
-          <section className="space-y-4">
+          <section className="min-w-0 space-y-4">
             <Card>
               <CardHeader className="pb-4">
                 <CardTitle className="text-base">Tool controls</CardTitle>
@@ -509,7 +604,12 @@ export function SearchShell() {
                         <Input
                           className="pl-9"
                           value={searchQuery}
-                          onChange={(event) => setSearchQuery(event.target.value)}
+                          onChange={(event) => {
+                            setSearchQuery(event.target.value);
+                            if (activeExampleQuery) {
+                              setActiveExampleQuery(null);
+                            }
+                          }}
                           onKeyDown={(event) => {
                             if (event.key === "Enter") {
                               void runSearch(0);
@@ -552,6 +652,25 @@ export function SearchShell() {
                         {loading && <Loader2 className="size-4 animate-spin" />}
                         Run search
                       </Button>
+                      <span className="text-xs text-muted-foreground">Examples:</span>
+                      {SEARCH_EXAMPLE_QUERIES.map((exampleQuery) => (
+                        <Button
+                          key={exampleQuery}
+                          type="button"
+                          size="sm"
+                          variant={
+                            activeExampleQuery?.toLowerCase() === exampleQuery.toLowerCase()
+                              ? "default"
+                              : "outline"
+                          }
+                          onClick={() => {
+                            setSearchQuery(exampleQuery);
+                            void runSearch(0, exampleQuery);
+                          }}
+                        >
+                          {exampleQuery}
+                        </Button>
+                      ))}
                       {showGuide && (
                         <p className="text-xs text-muted-foreground text-pretty">
                           Example queries: <span className="font-medium text-foreground">house</span>,{" "}
@@ -565,7 +684,7 @@ export function SearchShell() {
 
                 {activeTab === "dictionary" && (
                   <div className="space-y-3 rounded-md border p-3">
-                    <div className="grid gap-2 md:grid-cols-[180px_minmax(0,1fr)]">
+                    <div className="grid gap-2 md:grid-cols-2">
                       <div className="space-y-1">
                         <p className="text-xs text-muted-foreground">Dictionary type</p>
                         <Select
@@ -581,80 +700,91 @@ export function SearchShell() {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-2 rounded-md border p-2">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-xs text-muted-foreground">
-                            Starts with: <span className="font-medium text-foreground">{dictionaryStartsWithLabel}</span>
-                          </p>
-                          <Button
-                            size="sm"
-                            variant={dictionaryStartsWith === "all" ? "default" : "outline"}
-                            onClick={() => setDictionaryStartsWith("all")}
-                          >
-                            All letters
-                          </Button>
-                        </div>
-                        <div dir="rtl" className="flex gap-1 overflow-x-auto pb-1">
-                          {ARABIC_LETTERS.filter((letter) => letter !== "all").map((letter) => (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">Filter index</p>
+                        <Input
+                          value={dictionaryContains}
+                          onFocus={() => setDictionaryFilterFocused(true)}
+                          onBlur={() => setDictionaryFilterFocused(false)}
+                          onChange={(event) => {
+                            setDictionaryContains(event.target.value);
+                            if (activeDictionaryExample) {
+                              setActiveDictionaryExample(null);
+                            }
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              void loadDictionaryIndex();
+                            }
+                          }}
+                          placeholder={dictionaryContainsPlaceholder}
+                        />
+                      </div>
+                    </div>
+
+                    {(showGuide || dictionaryFilterFocused) && (
+                      <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
+                        <p className="text-pretty">
+                          <span className="font-medium text-foreground">All letters</span> shows the broad index
+                          (up to 200 rows). Pick one letter first, then filter by text for faster lookup.
+                        </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-1">
+                          <span>Examples:</span>
+                          {dictionaryContainsExamples.map((example) => (
                             <Button
-                              key={letter}
+                              key={example}
                               type="button"
                               size="sm"
-                              variant={dictionaryStartsWith === letter ? "default" : "outline"}
-                              className="h-8 min-w-8 px-2 font-arabic text-base"
-                              onClick={() => setDictionaryStartsWith(letter)}
+                              variant="outline"
+                              className="h-7 px-2"
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => setDictionaryContains(example)}
                             >
-                              {letter}
+                              {example}
                             </Button>
                           ))}
                         </div>
                       </div>
-                    </div>
+                    )}
 
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">Filter index</p>
-                      <Input
-                        value={dictionaryContains}
-                        onFocus={() => setDictionaryFilterFocused(true)}
-                        onBlur={() => setDictionaryFilterFocused(false)}
-                        onChange={(event) => setDictionaryContains(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            void loadDictionaryIndex();
-                          }
-                        }}
-                        placeholder={dictionaryContainsPlaceholder}
-                      />
-                      {(showGuide || dictionaryFilterFocused) && (
-                        <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground">
-                          <p className="text-pretty">
-                            <span className="font-medium text-foreground">All letters</span> shows the broad index
-                            (up to 200 rows). Pick one letter first, then filter by text for faster lookup.
-                          </p>
-                          <div className="mt-2 flex flex-wrap items-center gap-1">
-                            <span>Examples:</span>
-                            {dictionaryContainsExamples.map((example) => (
-                              <Button
-                                key={example}
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="h-7 px-2"
-                                onMouseDown={(event) => event.preventDefault()}
-                                onClick={() => setDictionaryContains(example)}
-                              >
-                                {example}
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                    <div className="min-w-0 space-y-2 rounded-md border p-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          Starts with: <span className="font-medium text-foreground">{dictionaryStartsWithLabel}</span>
+                        </p>
+                        <Button
+                          size="sm"
+                          variant={dictionaryStartsWith === "all" ? "default" : "outline"}
+                          onClick={() => setDictionaryStartsWith("all")}
+                        >
+                          All letters
+                        </Button>
+                      </div>
+                      <div dir="rtl" className="flex flex-wrap justify-end gap-1 pb-1">
+                        {ARABIC_LETTERS.filter((letter) => letter !== "all").map((letter) => (
+                          <Button
+                            key={letter}
+                            type="button"
+                            size="sm"
+                            variant={dictionaryStartsWith === letter ? "default" : "outline"}
+                            className="h-8 min-w-8 px-2 font-arabic text-base"
+                            onClick={() => setDictionaryStartsWith(letter)}
+                          >
+                            {letter}
+                          </Button>
+                        ))}
+                      </div>
                     </div>
 
                     <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto]">
                       <Select
                         value={selectedDictionaryEntry}
-                        onValueChange={setSelectedDictionaryEntry}
+                        onValueChange={(value) => {
+                          setSelectedDictionaryEntry(value);
+                          if (activeDictionaryExample) {
+                            setActiveDictionaryExample(null);
+                          }
+                        }}
                         disabled={dictionaryIndex.length === 0}
                       >
                         <SelectTrigger>
@@ -679,6 +809,24 @@ export function SearchShell() {
                         Open entry
                       </Button>
                     </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Open example:</span>
+                      {dictionaryContainsExamples.map((example) => (
+                        <Button
+                          key={example}
+                          type="button"
+                          size="sm"
+                          variant={activeDictionaryExample === example ? "default" : "outline"}
+                          onClick={() => {
+                            setDictionaryContains(example);
+                            setSelectedDictionaryEntry(example);
+                            void runDictionary(example);
+                          }}
+                        >
+                          {example}
+                        </Button>
+                      ))}
+                    </div>
                     {!loading && dictionaryIndex.length === 0 && (
                       <p className="text-xs text-muted-foreground text-pretty">
                         No index matches for the current filters. Try another letter or a shorter filter.
@@ -692,7 +840,12 @@ export function SearchShell() {
                     <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto]">
                       <Input
                         value={concordanceQuery}
-                        onChange={(event) => setConcordanceQuery(event.target.value)}
+                        onChange={(event) => {
+                          setConcordanceQuery(event.target.value);
+                          if (activeConcordanceExample) {
+                            setActiveConcordanceExample(null);
+                          }
+                        }}
                         onKeyDown={(event) => {
                           if (event.key === "Enter") {
                             void runConcordance();
@@ -740,6 +893,21 @@ export function SearchShell() {
                         {loading && <Loader2 className="size-4 animate-spin" />}
                         Run concordance
                       </Button>
+                      <span className="text-xs text-muted-foreground">Examples:</span>
+                      {CONCORDANCE_EXAMPLE_QUERIES.map((exampleQuery) => (
+                        <Button
+                          key={exampleQuery}
+                          type="button"
+                          size="sm"
+                          variant={activeConcordanceExample === exampleQuery ? "default" : "outline"}
+                          onClick={() => {
+                            setConcordanceQuery(exampleQuery);
+                            void runConcordance(exampleQuery);
+                          }}
+                        >
+                          {exampleQuery}
+                        </Button>
+                      ))}
                       {showGuide && (
                         <p className="text-xs text-muted-foreground text-pretty">
                           Try grouping by lemma/root after running a query to review clusters quickly.
@@ -768,6 +936,28 @@ export function SearchShell() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
+                {activeTab === "search" && activeExampleQuery && searchData != null && (
+                  <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground text-pretty">
+                    Showing example results for{" "}
+                    <span className="font-medium text-foreground">{activeExampleQuery}</span>. Replace the query and
+                    run search to explore your own term.
+                  </div>
+                )}
+                {activeTab === "dictionary" && activeDictionaryExample && dictionaryData != null && (
+                  <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground text-pretty">
+                    Showing example dictionary entry for{" "}
+                    <span className="font-medium text-foreground">{activeDictionaryExample}</span>. Pick another entry
+                    or use filters to explore different roots/lemmas.
+                  </div>
+                )}
+                {activeTab === "concordance" && activeConcordanceExample && concordanceData != null && (
+                  <div className="rounded-md border border-dashed p-2 text-xs text-muted-foreground text-pretty">
+                    Showing example concordance for{" "}
+                    <span className="font-medium text-foreground">{activeConcordanceExample}</span>. Replace the query
+                    to inspect your own term.
+                  </div>
+                )}
+
                 {activeTab === "search" && searchData == null && !loading && (
                   <p className="text-sm text-muted-foreground text-pretty">
                     Run a search query to load matching tokens and verses.
