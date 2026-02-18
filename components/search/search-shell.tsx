@@ -329,15 +329,26 @@ export function SearchShell() {
   const dictionaryStartsWithLabel =
     dictionaryStartsWith === "all" ? "All letters" : `Letter ${dictionaryStartsWith}`;
   const hasSharedFilters = exact || diacritics || chapter !== "all";
+  const normalizeDictionaryValue = useCallback(
+    (value: string) => {
+      const trimmed = value.trim();
+      if (dictionaryType !== "root") {
+        return trimmed;
+      }
+      return trimmed.replace(/\s+/g, "");
+    },
+    [dictionaryType],
+  );
 
   const loadDictionaryIndex = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      const normalizedContains = normalizeDictionaryValue(dictionaryContains);
       const response = await getDictionaryIndex({
         type: dictionaryType,
         startsWith: dictionaryStartsWith === "all" ? undefined : dictionaryStartsWith,
-        contains: dictionaryContains.trim() || undefined,
+        contains: normalizedContains || undefined,
         limit: 200,
       });
       setDictionaryIndex(response.entries);
@@ -354,7 +365,13 @@ export function SearchShell() {
     } finally {
       setLoading(false);
     }
-  }, [dictionaryContains, dictionaryStartsWith, dictionaryType, selectedDictionaryEntry]);
+  }, [
+    dictionaryContains,
+    dictionaryStartsWith,
+    dictionaryType,
+    normalizeDictionaryValue,
+    selectedDictionaryEntry,
+  ]);
 
   useEffect(() => {
     if (activeTab === "dictionary") {
@@ -363,7 +380,8 @@ export function SearchShell() {
   }, [activeTab, loadDictionaryIndex]);
 
   const runDictionary = useCallback(async (explicitEntry?: string) => {
-    const dictionaryQuery = (explicitEntry ?? selectedDictionaryEntry).trim();
+    const rawDictionaryQuery = (explicitEntry ?? selectedDictionaryEntry).trim();
+    const dictionaryQuery = normalizeDictionaryValue(rawDictionaryQuery);
     if (!dictionaryQuery) {
       setError("Pick a root/lemma entry first.");
       return;
@@ -372,7 +390,9 @@ export function SearchShell() {
     setLoading(true);
     setError(null);
     try {
-      setActiveDictionaryExample(dictionaryExampleSet.has(dictionaryQuery) ? dictionaryQuery : null);
+      setActiveDictionaryExample(
+        dictionaryExampleSet.has(rawDictionaryQuery) ? rawDictionaryQuery : null,
+      );
 
       const [details, occurrences] = await Promise.all([
         getDictionary({
@@ -414,6 +434,7 @@ export function SearchShell() {
     dictionaryExampleSet,
     dictionaryType,
     diacritics,
+    normalizeDictionaryValue,
     selectedDictionaryEntry,
     translation,
   ]);
