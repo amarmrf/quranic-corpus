@@ -51,7 +51,7 @@ npm run dev
 
 ### Reader scope in this iteration
 
-- Tactical reader workspace focused on word-by-word morphology research.
+- Research reader workspace focused on word-by-word morphology research.
 - Token selection with side-panel analysis (`/morphology/word`).
 - Chapter/verse controls with infinite continuation and previous loading.
 - Translation toggles, POS filters, and query-based token highlighting.

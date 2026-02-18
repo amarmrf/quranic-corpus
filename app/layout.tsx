@@ -18,7 +18,7 @@ const arabic = Noto_Naskh_Arabic({
 export const metadata: Metadata = {
   title: "Quranic Corpus Reader",
   description:
-    "Tactical research reader for Quranic Corpus morphology and translation study.",
+    "Research reader for Quranic Corpus morphology and translation study.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

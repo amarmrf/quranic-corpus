@@ -156,6 +156,8 @@ export function ReaderShell({ locationParam }: Props) {
     () => getVerseBoundaries(verses, verseNumber),
     [verseNumber, verses],
   );
+  const showChapterOpeningLine = verses.length > 0 && verseBoundaries.firstVerse === 1;
+  const hasBismillah = chapterNumber !== 9;
 
   const availablePosTags = useMemo(
     () =>
@@ -171,6 +173,24 @@ export function ReaderShell({ locationParam }: Props) {
 
   const normalizedSearch = useMemo(() => searchQuery.trim().toLowerCase(), [searchQuery]);
   const hasActiveTokenFilter = normalizedSearch.length > 0 || selectedPosTags.length > 0;
+  const selectedTranslationNames = useMemo(() => {
+    if (!metadata) {
+      return [];
+    }
+
+    return selectedTranslations
+      .map((key) => metadata.translations.find((translation) => translation.key === key)?.name)
+      .filter((name): name is string => Boolean(name));
+  }, [metadata, selectedTranslations]);
+  const selectedTranslationsLabel = useMemo(() => {
+    if (selectedTranslationNames.length === 0) {
+      return "Translations";
+    }
+
+    const visibleNames = selectedTranslationNames.slice(0, 2).join(", ");
+    const remainingCount = selectedTranslationNames.length - 2;
+    return remainingCount > 0 ? `${visibleNames}, +${remainingCount}` : visibleNames;
+  }, [selectedTranslationNames]);
 
   const isTokenVisible = useCallback(
     (token: Token) => {
@@ -196,31 +216,27 @@ export function ReaderShell({ locationParam }: Props) {
   }, [isTokenVisible, verses]);
 
   useEffect(() => {
-    const headerElement = headerRef.current;
-    if (!headerElement) {
-      return;
-    }
-
-    const updateHeaderHeight = () => {
-      setHeaderHeight(Math.ceil(headerElement.getBoundingClientRect().height));
+    const updateLayoutMetrics = () => {
+      setHeaderHeight(Math.ceil(headerRef.current?.getBoundingClientRect().height ?? 0));
     };
 
-    updateHeaderHeight();
+    updateLayoutMetrics();
 
-    if (typeof ResizeObserver !== "undefined") {
-      const observer = new ResizeObserver(() => updateHeaderHeight());
+    const headerElement = headerRef.current;
+    if (typeof ResizeObserver !== "undefined" && headerElement) {
+      const observer = new ResizeObserver(() => updateLayoutMetrics());
       observer.observe(headerElement);
-      window.addEventListener("resize", updateHeaderHeight);
+      window.addEventListener("resize", updateLayoutMetrics);
 
       return () => {
         observer.disconnect();
-        window.removeEventListener("resize", updateHeaderHeight);
+        window.removeEventListener("resize", updateLayoutMetrics);
       };
     }
 
-    window.addEventListener("resize", updateHeaderHeight);
+    window.addEventListener("resize", updateLayoutMetrics);
     return () => {
-      window.removeEventListener("resize", updateHeaderHeight);
+      window.removeEventListener("resize", updateLayoutMetrics);
     };
   }, []);
 
@@ -351,7 +367,13 @@ export function ReaderShell({ locationParam }: Props) {
     }
 
     const anchorElement = document.getElementById(toVerseId(chapterNumber, verseNumber));
-    anchorElement?.scrollIntoView({ block: "start" });
+    if (!anchorElement) {
+      return;
+    }
+
+    const headerOffset = (headerRef.current?.getBoundingClientRect().height ?? 0) + 16;
+    const targetTop = window.scrollY + anchorElement.getBoundingClientRect().top - headerOffset;
+    window.scrollTo({ top: Math.max(0, targetTop), behavior: "auto" });
     initialAnchorRef.current = anchorKey;
   }, [chapterNumber, initialLoading, verseNumber, verses.length]);
 
@@ -698,9 +720,9 @@ export function ReaderShell({ locationParam }: Props) {
           <div className="flex flex-col gap-3">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="space-y-1">
-                <h1 className="text-xl font-semibold text-balance">Quranic Corpus Tactical Reader</h1>
+                <h1 className="text-xl font-semibold text-balance">Quranic Corpus Reader</h1>
                 <p className="max-w-3xl text-sm text-muted-foreground text-pretty">
-                  Reader-focused workspace for token-level morphology research.
+                  Research-focused workspace for token-level morphology research.
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -731,8 +753,29 @@ export function ReaderShell({ locationParam }: Props) {
               </div>
             </div>
 
-            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-[auto_minmax(0,1fr)_minmax(0,1fr)_auto_minmax(0,1fr)]">
-              <div className="flex items-center gap-2">
+            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-[minmax(11rem,16rem)_auto_minmax(14rem,1fr)_minmax(11rem,14rem)]">
+              <Select
+                value={String(chapterNumber)}
+                onValueChange={(value) => navigateToVerse(Number(value), 1)}
+                disabled={!metadata || metadata.chapters.length === 0}
+              >
+                <SelectTrigger aria-label="Select chapter" className="truncate">
+                  <SelectValue placeholder="Chapter" />
+                </SelectTrigger>
+                <SelectContent>
+                  {metadata?.chapters.map((chapter) => (
+                    <SelectItem
+                      key={chapter.chapterNumber}
+                      value={String(chapter.chapterNumber)}
+                      className="tabular-nums"
+                    >
+                      {chapter.chapterNumber}. {chapter.phonetic}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <div className="flex items-center gap-2 md:justify-end">
                 <Button
                   type="button"
                   variant="outline"
@@ -753,56 +796,39 @@ export function ReaderShell({ locationParam }: Props) {
                 >
                   <ChevronRight className="size-4" aria-hidden="true" />
                 </Button>
+                <Select
+                  value={String(verseNumber)}
+                  onValueChange={(value) => navigateToVerse(chapterNumber, Number(value))}
+                  disabled={!activeChapter}
+                >
+                  <SelectTrigger aria-label="Select verse" className="w-24 tabular-nums">
+                    <SelectValue placeholder="#" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeChapter &&
+                      Array.from({ length: activeChapter.verseCount }, (_, index) => {
+                        const value = index + 1;
+                        return (
+                          <SelectItem key={value} value={String(value)} className="tabular-nums">
+                            {value}
+                          </SelectItem>
+                        );
+                      })}
+                  </SelectContent>
+                </Select>
               </div>
-
-              <Select
-                value={String(chapterNumber)}
-                onValueChange={(value) => navigateToVerse(Number(value), 1)}
-                disabled={!metadata || metadata.chapters.length === 0}
-              >
-                <SelectTrigger aria-label="Select chapter">
-                  <SelectValue placeholder="Chapter" />
-                </SelectTrigger>
-                <SelectContent>
-                  {metadata?.chapters.map((chapter) => (
-                    <SelectItem
-                      key={chapter.chapterNumber}
-                      value={String(chapter.chapterNumber)}
-                      className="tabular-nums"
-                    >
-                      {chapter.chapterNumber}. {chapter.phonetic}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select
-                value={String(verseNumber)}
-                onValueChange={(value) => navigateToVerse(chapterNumber, Number(value))}
-                disabled={!activeChapter}
-              >
-                <SelectTrigger aria-label="Select verse">
-                  <SelectValue placeholder="Verse" />
-                </SelectTrigger>
-                <SelectContent>
-                  {activeChapter &&
-                    Array.from({ length: activeChapter.verseCount }, (_, index) => {
-                      const value = index + 1;
-                      return (
-                        <SelectItem key={value} value={String(value)} className="tabular-nums">
-                          Verse {value}
-                        </SelectItem>
-                      );
-                    })}
-                </SelectContent>
-              </Select>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full lg:w-auto">
-                    <BookText className="size-4" aria-hidden="true" />
-                    Translations ({selectedTranslations.length})
-                    <ChevronDown className="size-4" aria-hidden="true" />
+                  <Button variant="outline" className="w-full justify-between gap-2">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <BookText className="size-4 shrink-0" aria-hidden="true" />
+                      <span className="truncate text-left">{selectedTranslationsLabel}</span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1 text-muted-foreground">
+                      <span className="text-xs tabular-nums">({selectedTranslations.length})</span>
+                      <ChevronDown className="size-4" aria-hidden="true" />
+                    </span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-72" align="start">
@@ -824,7 +850,7 @@ export function ReaderShell({ locationParam }: Props) {
                 <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
                 <Input
                   aria-label="Search token gloss or transliteration"
-                  placeholder="Search token gloss or transliteration"
+                  placeholder="Search token"
                   className="pl-9"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
@@ -868,7 +894,7 @@ export function ReaderShell({ locationParam }: Props) {
               <div className="space-y-2 rounded-md border p-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-xs text-muted-foreground">
-                    POS tactical filter ({selectedPosTags.length})
+                    POS filter ({selectedPosTags.length})
                   </p>
                   <Button
                     type="button"
@@ -1008,109 +1034,132 @@ export function ReaderShell({ locationParam }: Props) {
 
                 {initialLoading ? (
                   <VerseSkeletonList />
-                ) : readerView ? (
-                  <ReaderVerseStream
-                    verses={verses}
-                    selectedToken={selectedToken}
-                    isTokenVisible={isTokenVisible}
-                    hasActiveTokenFilter={hasActiveTokenFilter}
-                    onSelectToken={setSelectedToken}
-                  />
                 ) : (
                   <div className="space-y-3">
-                    {verses.map((verse) => {
-                      const [chapter, verseNo] = verse.location;
+                    {showChapterOpeningLine && (
+                      <div className="rounded-md border border-dashed px-4 py-3">
+                        {hasBismillah ? (
+                          <div className="space-y-1">
+                            <p dir="rtl" className="font-arabic text-3xl leading-none text-center">
+                              بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
+                            </p>
+                            <p className="text-xs text-muted-foreground text-center text-pretty">
+                              Bismillah
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground text-center text-pretty">
+                            No Bismillah for this surah (At-Tawbah).
+                          </p>
+                        )}
+                      </div>
+                    )}
 
-                      return (
-                        <Card
-                          key={`${chapter}:${verseNo}`}
-                          id={toVerseId(chapter, verseNo)}
-                          className="border-dashed"
-                        >
-                          <CardHeader className="pb-3">
-                            <div className="flex items-center justify-between gap-2">
-                              <CardTitle className="text-sm font-semibold tabular-nums">
-                                {chapter}:{verseNo}
-                              </CardTitle>
-                              <div className="flex items-center gap-1">
-                                {verse.verseMark && (
-                                  <Badge variant="secondary" className="tabular-nums">
-                                    {verse.verseMark}
-                                  </Badge>
-                                )}
-                                <Badge variant="outline" className="tabular-nums">
-                                  {verse.tokens.length} tokens
-                                </Badge>
-                              </div>
-                            </div>
-                          </CardHeader>
-                          <CardContent className="space-y-3">
-                            <div dir="rtl" className="flex flex-wrap justify-end gap-2">
-                              {verse.tokens.map((token) => {
-                                const arabicToken = getArabicToken(token);
-                                const tokenLocation = token.location as [number, number, number];
-                                const selected =
-                                  selectedToken?.[0] === tokenLocation[0] &&
-                                  selectedToken?.[1] === tokenLocation[1] &&
-                                  selectedToken?.[2] === tokenLocation[2];
-                                const isVisible = isTokenVisible(token);
-                                const shouldDim = !isVisible && !selected;
+                    {readerView ? (
+                      <ReaderVerseStream
+                        verses={verses}
+                        selectedToken={selectedToken}
+                        isTokenVisible={isTokenVisible}
+                        hasActiveTokenFilter={hasActiveTokenFilter}
+                        onSelectToken={setSelectedToken}
+                      />
+                    ) : (
+                      <div className="space-y-3">
+                        {verses.map((verse) => {
+                          const [chapter, verseNo] = verse.location;
 
-                                return (
-                                  <button
-                                    key={token.location.join(":")}
-                                    id={toTokenId(tokenLocation)}
-                                    type="button"
-                                    onClick={() => setSelectedToken(tokenLocation)}
-                                    className={cn(
-                                      "flex min-w-16 flex-col items-end rounded-md border px-2 py-1.5 text-right shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                                      "gap-1",
-                                      selected
-                                        ? "border-primary bg-primary/20 ring-2 ring-primary/60 ring-offset-1 ring-offset-background"
-                                        : hasActiveTokenFilter && isVisible
-                                          ? "border-primary/40 bg-primary/10"
-                                          : "border-border bg-background hover:bg-accent",
-                                      shouldDim && "opacity-30",
+                          return (
+                            <Card
+                              key={`${chapter}:${verseNo}`}
+                              id={toVerseId(chapter, verseNo)}
+                              className="border-dashed"
+                            >
+                              <CardHeader className="pb-3">
+                                <div className="flex items-center justify-between gap-2">
+                                  <CardTitle className="text-sm font-semibold tabular-nums">
+                                    {chapter}:{verseNo}
+                                  </CardTitle>
+                                  <div className="flex items-center gap-1">
+                                    {verse.verseMark && (
+                                      <Badge variant="secondary" className="tabular-nums">
+                                        {verse.verseMark}
+                                      </Badge>
                                     )}
-                                  >
-                                    <span className="font-arabic text-2xl leading-none">
-                                      {arabicToken.length > 0 ? arabicToken : token.translation}
-                                    </span>
-                                    {showPhonetic && (
-                                      <span className="max-w-40 truncate text-[11px] text-muted-foreground">
-                                        {token.phonetic}
-                                      </span>
-                                    )}
-                                    {showTranslations && (
-                                      <span className="max-w-40 truncate text-[11px] text-muted-foreground">
-                                        {token.translation}
-                                      </span>
-                                    )}
-                                    <span className="text-[10px] font-semibold text-primary tabular-nums">
-                                      {token.segments[0]?.posTag ?? "-"}
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-
-                            {showTranslations && verse.translations && verse.translations.length > 0 && (
-                              <div className="space-y-2">
-                                <Separator />
-                                <div className="space-y-1.5">
-                                  {verse.translations.map((translation) => (
-                                    <p key={translation.name} className="text-sm text-pretty">
-                                      <span className="font-semibold">{translation.name}:</span>{" "}
-                                      {translation.translation}
-                                    </p>
-                                  ))}
+                                    <Badge variant="outline" className="tabular-nums">
+                                      {verse.tokens.length} tokens
+                                    </Badge>
+                                  </div>
                                 </div>
+                              </CardHeader>
+                              <CardContent className="space-y-3">
+                                <div dir="rtl" className="flex flex-wrap justify-end gap-2">
+                                  {verse.tokens.map((token) => {
+                                    const arabicToken = getArabicToken(token);
+                                    const tokenLocation = token.location as [number, number, number];
+                                    const selected =
+                                      selectedToken?.[0] === tokenLocation[0] &&
+                                      selectedToken?.[1] === tokenLocation[1] &&
+                                      selectedToken?.[2] === tokenLocation[2];
+                                    const isVisible = isTokenVisible(token);
+                                    const shouldDim = !isVisible && !selected;
+
+                                    return (
+                                      <button
+                                        key={token.location.join(":")}
+                                        id={toTokenId(tokenLocation)}
+                                        type="button"
+                                        onClick={() => setSelectedToken(tokenLocation)}
+                                        className={cn(
+                                          "flex min-w-16 flex-col items-end rounded-md border px-2 py-1.5 text-right shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                                          "gap-1",
+                                          selected
+                                            ? "border-primary bg-primary/20 ring-2 ring-primary/60 ring-offset-1 ring-offset-background"
+                                            : hasActiveTokenFilter && isVisible
+                                              ? "border-primary/40 bg-primary/10"
+                                              : "border-border bg-background hover:bg-accent",
+                                          shouldDim && "opacity-30",
+                                        )}
+                                      >
+                                        <span className="font-arabic text-2xl leading-none">
+                                          {arabicToken.length > 0 ? arabicToken : token.translation}
+                                        </span>
+                                        {showPhonetic && (
+                                          <span className="max-w-40 truncate text-[11px] text-muted-foreground">
+                                            {token.phonetic}
+                                          </span>
+                                        )}
+                                        {showTranslations && (
+                                          <span className="max-w-40 truncate text-[11px] text-muted-foreground">
+                                            {token.translation}
+                                          </span>
+                                        )}
+                                        <span className="text-[10px] font-semibold text-primary tabular-nums">
+                                          {token.segments[0]?.posTag ?? "-"}
+                                        </span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+
+                                {showTranslations && verse.translations && verse.translations.length > 0 && (
+                                  <div className="space-y-2">
+                                    <Separator />
+                                    <div className="space-y-1.5">
+                                      {verse.translations.map((translation) => (
+                                        <p key={translation.name} className="text-sm text-pretty">
+                                          <span className="font-semibold">{translation.name}:</span>{" "}
+                                          {translation.translation}
+                                        </p>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1141,14 +1190,14 @@ export function ReaderShell({ locationParam }: Props) {
             className="lg:sticky lg:top-[var(--reader-pane-top)] lg:self-start"
             style={paneLayoutVars}
           >
-            <Card className="lg:max-h-[var(--reader-pane-max-height)] lg:overflow-hidden">
+            <Card className="lg:flex lg:max-h-[var(--reader-pane-max-height)] lg:flex-col lg:overflow-hidden">
               <CardHeader>
                 <CardTitle className="text-base text-balance">Token analysis pane</CardTitle>
                 <CardDescription className="text-pretty">
-                  Compact view for token details, segments, and grammar.
+                Token details, segments, and grammar.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-3 lg:overflow-y-auto">
+              <CardContent className="space-y-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                 {!selectedToken && (
                   <div className="space-y-3 rounded-md border border-dashed p-4">
                     <p className="text-sm text-muted-foreground text-pretty">
@@ -1180,11 +1229,20 @@ export function ReaderShell({ locationParam }: Props) {
                           <p className="text-xs text-muted-foreground">Selected location</p>
                           <p className="text-sm font-semibold tabular-nums">{selectedToken.join(":")}</p>
                         </div>
-                        {selectedTokenData && (
-                          <Badge variant="outline" className="tabular-nums">
-                            {selectedTokenData.segments.length} segments
-                          </Badge>
-                        )}
+                        <div className="flex flex-col items-end gap-2">
+                          {selectedTokenData && (
+                            <Badge variant="outline" className="tabular-nums">
+                              {selectedTokenData.segments.length} segments
+                            </Badge>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={jumpToSelectedToken}
+                          >
+                            Show token
+                          </Button>
+                        </div>
                       </div>
                       {selectedTokenArabic.length > 0 && (
                         <p className="font-arabic text-2xl leading-none">{selectedTokenArabic}</p>
@@ -1252,15 +1310,6 @@ export function ReaderShell({ locationParam }: Props) {
                       </div>
                     )}
 
-                    {selectedToken && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={jumpToSelectedToken}
-                      >
-                        Jump to selected token
-                      </Button>
-                    )}
                   </div>
                 )}
               </CardContent>
