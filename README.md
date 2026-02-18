@@ -2,6 +2,60 @@
 
 *Please use [pull requests](https://docs.github.com/en/github/collaborating-with-issues-and-pull-requests/creating-a-pull-request) for code contributions instead of forking this repo. We will add you as a collaborator to the repository. 🚀*
 
+## Frontend (Next.js 16)
+
+The frontend is now based on:
+
+- Next.js 16 (App Router)
+- React 19
+- Tailwind CSS
+- shadcn-style component primitives (Radix + `cn` utility)
+
+### Local setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Configure API target:
+
+```bash
+cp .env.example .env.local
+```
+
+Default `.env.example` points to local backend:
+
+```bash
+QURANIC_API_BASE=http://localhost:6382
+NEXT_PUBLIC_QURANIC_API_BASE=http://localhost:6382
+```
+
+You can also point to production API:
+
+```bash
+QURANIC_API_BASE=https://qurancorpus.app/api
+NEXT_PUBLIC_QURANIC_API_BASE=https://qurancorpus.app/api
+```
+
+3. Run development server:
+
+```bash
+npm run dev
+```
+
+4. Open:
+
+- `http://localhost:3000` (redirects to `/reader/1:1`)
+
+### Reader scope in this iteration
+
+- Tactical reader workspace focused on word-by-word morphology research.
+- Token selection with side-panel analysis (`/morphology/word`).
+- Chapter/verse controls with infinite continuation and previous loading.
+- Translation toggles, POS filters, and query-based token highlighting.
+
 ## Project Aims
 
 TL;DR: The Quranic Arabic Corpus, an invaluable linguistic resource, is due for a revamp. We're calling on Linguistics, AI, and Tech volunteers to join us in this exciting journey.
