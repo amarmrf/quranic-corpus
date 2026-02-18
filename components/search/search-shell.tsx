@@ -62,6 +62,32 @@ const GROUP_BY_OPTIONS: { value: SearchGroupBy; label: string }[] = [
 ];
 
 const ARABIC_LETTERS = ["all", "ا", "ب", "ت", "ث", "ج", "ح", "خ", "د", "ذ", "ر", "ز", "س", "ش", "ص", "ض", "ط", "ظ", "ع", "غ", "ف", "ق", "ك", "ل", "م", "ن", "ه", "و", "ي"] as const;
+const LINGUISTIC_TERMS: { term: string; description: string }[] = [
+  {
+    term: "Lemma",
+    description: "Dictionary headword for a word-form family (e.g., different inflections under one entry).",
+  },
+  {
+    term: "Root",
+    description: "Core consonantal base that links related words by meaning in Arabic morphology.",
+  },
+  {
+    term: "Surface form",
+    description: "The exact token as it appears in the verse text, including spelling variations.",
+  },
+  {
+    term: "Gloss",
+    description: "Short meaning hint used for quick reading before checking full translation context.",
+  },
+  {
+    term: "POS",
+    description: "Part of speech label such as noun, verb, particle, pronoun, and related categories.",
+  },
+  {
+    term: "Concordance",
+    description: "List of every occurrence of a query with local context for comparison across verses.",
+  },
+];
 
 export function SearchShell() {
   const router = useRouter();
@@ -189,8 +215,9 @@ export function SearchShell() {
   );
 
   const runSearch = useCallback(
-    async (nextOffset = 0, explicitQuery?: string) => {
+    async (nextOffset = 0, explicitQuery?: string, explicitMode?: SearchMode) => {
       const q = (explicitQuery ?? searchQuery).trim();
+      const mode = explicitMode ?? searchMode;
       if (q.length === 0) {
         setError("Enter a query before searching.");
         return;
@@ -205,7 +232,7 @@ export function SearchShell() {
 
         const next = await getSearch({
           q,
-          mode: searchMode,
+          mode,
           translation,
           chapter: chapterNumber,
           exact,
@@ -224,7 +251,7 @@ export function SearchShell() {
         setSearchOffset(nextOffset);
         const urlParams = new URLSearchParams(urlSearchParams);
         urlParams.set("q", q);
-        urlParams.set("mode", searchMode);
+        urlParams.set("mode", mode);
         urlParams.set("translation", translation);
         router.replace(`/search?${urlParams.toString()}`);
       } catch (requestError) {
@@ -250,23 +277,49 @@ export function SearchShell() {
   );
 
   useEffect(() => {
+    if (activeTab !== "search") {
+      return;
+    }
+
     if (defaultSearchLoadedRef.current) {
       return;
     }
 
     const initialQuery = urlSearchParams.get("q")?.trim() ?? "";
-    if (initialQuery.length > 0) {
-      return;
-    }
-
     defaultSearchLoadedRef.current = true;
-    setSearchQuery(DEFAULT_SEARCH_EXAMPLE);
-    void runSearch(0, DEFAULT_SEARCH_EXAMPLE);
-  }, [runSearch, urlSearchParams]);
+
+    const initialModeParam = urlSearchParams.get("mode");
+    const initialMode: SearchMode =
+      initialModeParam === "surface" ||
+      initialModeParam === "lemma" ||
+      initialModeParam === "root" ||
+      initialModeParam === "translation"
+        ? initialModeParam
+        : "surface";
+
+    const queryToRun = initialQuery.length > 0 ? initialQuery : DEFAULT_SEARCH_EXAMPLE;
+    const modeToRun = initialQuery.length > 0 ? initialMode : "surface";
+
+    setSearchMode(modeToRun);
+    setSearchSort("relevance");
+    setSearchQuery(queryToRun);
+    void runSearch(0, queryToRun, modeToRun);
+  }, [activeTab, runSearch, urlSearchParams]);
+
+  const clearActiveDictionaryExample = useCallback((clearFilter = false) => {
+    setActiveDictionaryExample((currentExample) => {
+      if (clearFilter && currentExample) {
+        setDictionaryContains((currentContains) =>
+          currentContains.trim() === currentExample ? "" : currentContains,
+        );
+      }
+      return null;
+    });
+  }, []);
 
   useEffect(() => {
-    setActiveDictionaryExample(null);
-  }, [dictionaryType]);
+    clearActiveDictionaryExample(true);
+  }, [clearActiveDictionaryExample, dictionaryType]);
 
   const dictionaryContainsExamples =
     dictionaryType === "root" ? DICTIONARY_ROOT_EXAMPLES : DICTIONARY_LEMMA_EXAMPLES;
@@ -689,7 +742,10 @@ export function SearchShell() {
                         <p className="text-xs text-muted-foreground">Dictionary type</p>
                         <Select
                           value={dictionaryType}
-                          onValueChange={(value) => setDictionaryType(value as DictionaryIndexType)}
+                          onValueChange={(value) => {
+                            setDictionaryType(value as DictionaryIndexType);
+                            clearActiveDictionaryExample(true);
+                          }}
                         >
                           <SelectTrigger>
                             <SelectValue />
@@ -708,9 +764,7 @@ export function SearchShell() {
                           onBlur={() => setDictionaryFilterFocused(false)}
                           onChange={(event) => {
                             setDictionaryContains(event.target.value);
-                            if (activeDictionaryExample) {
-                              setActiveDictionaryExample(null);
-                            }
+                            clearActiveDictionaryExample();
                           }}
                           onKeyDown={(event) => {
                             if (event.key === "Enter") {
@@ -738,7 +792,10 @@ export function SearchShell() {
                               variant="outline"
                               className="h-7 px-2"
                               onMouseDown={(event) => event.preventDefault()}
-                              onClick={() => setDictionaryContains(example)}
+                              onClick={() => {
+                                setDictionaryContains(example);
+                                clearActiveDictionaryExample();
+                              }}
                             >
                               {example}
                             </Button>
@@ -755,7 +812,10 @@ export function SearchShell() {
                         <Button
                           size="sm"
                           variant={dictionaryStartsWith === "all" ? "default" : "outline"}
-                          onClick={() => setDictionaryStartsWith("all")}
+                          onClick={() => {
+                            setDictionaryStartsWith("all");
+                            clearActiveDictionaryExample(true);
+                          }}
                         >
                           All letters
                         </Button>
@@ -768,7 +828,10 @@ export function SearchShell() {
                             size="sm"
                             variant={dictionaryStartsWith === letter ? "default" : "outline"}
                             className="h-8 min-w-8 px-2 font-arabic text-base"
-                            onClick={() => setDictionaryStartsWith(letter)}
+                            onClick={() => {
+                              setDictionaryStartsWith(letter);
+                              clearActiveDictionaryExample(true);
+                            }}
                           >
                             {letter}
                           </Button>
@@ -781,9 +844,7 @@ export function SearchShell() {
                         value={selectedDictionaryEntry}
                         onValueChange={(value) => {
                           setSelectedDictionaryEntry(value);
-                          if (activeDictionaryExample) {
-                            setActiveDictionaryExample(null);
-                          }
+                          clearActiveDictionaryExample();
                         }}
                         disabled={dictionaryIndex.length === 0}
                       >
@@ -818,6 +879,10 @@ export function SearchShell() {
                           size="sm"
                           variant={activeDictionaryExample === example ? "default" : "outline"}
                           onClick={() => {
+                            if (activeDictionaryExample === example) {
+                              clearActiveDictionaryExample(true);
+                              return;
+                            }
                             setDictionaryContains(example);
                             setSelectedDictionaryEntry(example);
                             void runDictionary(example);
@@ -1077,43 +1142,22 @@ export function SearchShell() {
             className="lg:sticky lg:top-[var(--search-side-pane-top)] lg:self-start"
             style={sidePaneVars}
           >
-            <Card>
+            <Card className="border-primary/40 bg-primary/10">
               <CardHeader>
-                <CardTitle className="text-base">{showGuide ? "Workflow guide" : "Difference"}</CardTitle>
-                <CardDescription>
-                  {showGuide
-                    ? "Use this panel as a quick checklist while running each tool."
-                    : "Search finds matches. Dictionary opens one lexical entry. Concordance lists occurrences."}
+                <CardTitle className="text-base text-primary text-balance">Linguistic terms</CardTitle>
+                <CardDescription className="text-pretty">
+                  Quick definitions for the labels shown in Search, Dictionary, and Concordance results.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2 text-sm text-muted-foreground">
-                {showGuide ? (
-                  <>
-                    <p className="text-pretty">
-                      <span className="font-medium text-foreground">Dictionary flow:</span> choose type, choose a
-                      start letter, add optional filter text, pick one entry, then open it.
-                    </p>
-                    <p className="text-pretty">
-                      <span className="font-medium text-foreground">About “All letters”:</span> it is a broad
-                      starting mode, best used only before narrowing with a letter or filter text.
-                    </p>
-                    <p className="text-pretty">
-                      <span className="font-medium text-foreground">Concordance flow:</span> run query first, then
-                      switch grouping to inspect lemma/root clusters.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p>
-                      Dictionary now uses a dedicated root/lemma index picker (starts-with letter + selection),
-                      not a generic search box.
-                    </p>
-                    <p>
-                      Dictionary entry view includes occurrence morphology (POS + morphological tags) so you can
-                      inspect root behavior.
-                    </p>
-                  </>
-                )}
+              <CardContent>
+                <dl className="space-y-2">
+                  {LINGUISTIC_TERMS.map((entry) => (
+                    <div key={entry.term} className="rounded-md border border-primary/25 bg-background/80 p-2">
+                      <dt className="text-sm font-medium text-foreground">{entry.term}</dt>
+                      <dd className="text-xs text-muted-foreground text-pretty">{entry.description}</dd>
+                    </div>
+                  ))}
+                </dl>
               </CardContent>
             </Card>
           </aside>
