@@ -1043,9 +1043,6 @@ export function ReaderShell({ locationParam }: Props) {
                             <p dir="rtl" className="font-arabic text-3xl leading-none text-center">
                               بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
                             </p>
-                            <p className="text-xs text-muted-foreground text-center text-pretty">
-                              Bismillah
-                            </p>
                           </div>
                         ) : (
                           <p className="text-sm text-muted-foreground text-center text-pretty">
@@ -1154,7 +1151,7 @@ export function ReaderShell({ locationParam }: Props) {
                                     </div>
                                   </div>
                                 )}
-                              </div>
+                              </CardContent>
                             </Card>
                           );
                         })}
