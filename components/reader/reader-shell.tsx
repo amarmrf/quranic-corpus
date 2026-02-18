@@ -1189,10 +1189,7 @@ export function ReaderShell({ locationParam }: Props) {
           >
             <Card className="lg:flex lg:max-h-[var(--reader-pane-max-height)] lg:flex-col lg:overflow-hidden">
               <CardHeader>
-                <CardTitle className="text-base text-balance">Token analysis pane</CardTitle>
-                <CardDescription className="text-pretty">
-                Token details, segments, and grammar.
-                </CardDescription>
+                <CardTitle className="text-base text-balance">Token details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
                 {!selectedToken && (
