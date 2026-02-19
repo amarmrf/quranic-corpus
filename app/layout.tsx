@@ -28,7 +28,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <script
           dangerouslySetInnerHTML={{
             __html:
-              '(function(){try{var key="qc.theme";var stored=localStorage.getItem(key);var dark=stored?stored==="dark":window.matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.classList.toggle("dark",dark);}catch(_e){}})();',
+              '(function(){try{var key="qc.theme";var stored=localStorage.getItem(key);var dark=stored?stored==="dark":true;document.documentElement.classList.toggle("dark",dark);}catch(_e){}})();',
           }}
         />
       </head>

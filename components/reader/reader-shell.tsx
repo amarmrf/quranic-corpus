@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   BookText,
@@ -23,6 +23,7 @@ import { getMetadata, getMorphology, getWordMorphology } from "@/lib/api";
 import { normalizeVerseLocation, parseLocation, toTokenId, toVerseId } from "@/lib/location";
 import type { Chapter, Token, Verse, WordMorphology } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { WorkbenchShell } from "@/components/layout/workbench-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -136,11 +137,9 @@ export function ReaderShell({ locationParam }: Props) {
   );
 
   const bottomSentinelRef = useRef<HTMLDivElement | null>(null);
-  const headerRef = useRef<HTMLElement | null>(null);
   const initialAnchorRef = useRef<string>("");
   const readerSessionIdRef = useRef(0);
   const versesRef = useRef<Verse[]>([]);
-  const [headerHeight, setHeaderHeight] = useState(0);
 
   const [chapterNumber, verseNumber] = useMemo(
     () => normalizeVerseLocation(parseLocation(locationParam)),
@@ -214,41 +213,6 @@ export function ReaderShell({ locationParam }: Props) {
     );
     return { totalTokens, visibleTokens };
   }, [isTokenVisible, verses]);
-
-  useEffect(() => {
-    const updateLayoutMetrics = () => {
-      setHeaderHeight(Math.ceil(headerRef.current?.getBoundingClientRect().height ?? 0));
-    };
-
-    updateLayoutMetrics();
-
-    const headerElement = headerRef.current;
-    if (typeof ResizeObserver !== "undefined" && headerElement) {
-      const observer = new ResizeObserver(() => updateLayoutMetrics());
-      observer.observe(headerElement);
-      window.addEventListener("resize", updateLayoutMetrics);
-
-      return () => {
-        observer.disconnect();
-        window.removeEventListener("resize", updateLayoutMetrics);
-      };
-    }
-
-    window.addEventListener("resize", updateLayoutMetrics);
-    return () => {
-      window.removeEventListener("resize", updateLayoutMetrics);
-    };
-  }, []);
-
-  const stickyPaneTop = Math.max(headerHeight + 16, 16);
-  const paneLayoutVars = useMemo(
-    () =>
-      ({
-        "--reader-pane-top": `${stickyPaneTop}px`,
-        "--reader-pane-max-height": `calc(100dvh - ${stickyPaneTop}px - env(safe-area-inset-bottom) - 1rem)`,
-      }) as CSSProperties,
-    [stickyPaneTop],
-  );
 
   const loadMetadata = useCallback(async () => {
     try {
@@ -371,9 +335,7 @@ export function ReaderShell({ locationParam }: Props) {
       return;
     }
 
-    const headerOffset = (headerRef.current?.getBoundingClientRect().height ?? 0) + 16;
-    const targetTop = window.scrollY + anchorElement.getBoundingClientRect().top - headerOffset;
-    window.scrollTo({ top: Math.max(0, targetTop), behavior: "auto" });
+    anchorElement.scrollIntoView({ block: "center", behavior: "auto" });
     initialAnchorRef.current = anchorKey;
   }, [chapterNumber, initialLoading, verseNumber, verses.length]);
 
@@ -710,50 +672,47 @@ export function ReaderShell({ locationParam }: Props) {
   const headerApi = "/api/quranic";
 
   return (
-    <div className="min-h-dvh bg-background pb-[calc(1rem+env(safe-area-inset-bottom))]">
-      <header
-        ref={headerRef}
-        className="sticky top-0 z-10 border-b bg-background"
-        style={{ paddingTop: "env(safe-area-inset-top)" }}
-      >
-        <div className="container py-3">
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div className="space-y-1">
-                <h1 className="text-xl font-semibold text-balance">Quranic Corpus Reader</h1>
-                <p className="max-w-3xl text-sm text-muted-foreground text-pretty">
-                  Research-focused workspace for token-level morphology research.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="tabular-nums">
-                  API proxy: {headerApi}
-                </Badge>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => router.push("/search")}
-                >
-                  <Search className="size-4" aria-hidden="true" />
-                  Search tools
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  aria-label="Toggle dark mode"
-                  onClick={toggleTheme}
-                >
-                  {theme === "dark" ? (
-                    <Sun className="size-4" aria-hidden="true" />
-                  ) : (
-                    <Moon className="size-4" aria-hidden="true" />
-                  )}
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-[minmax(11rem,16rem)_auto_minmax(14rem,1fr)_minmax(11rem,14rem)]">
+    <WorkbenchShell
+      title="Quranic Corpus Reader"
+      description="Console-style study surface for token-level morphology and verse navigation."
+      leftLabel="Navigation & Filters"
+      mainLabel="Reader Stream"
+      rightLabel="Token Inspector"
+      rightContentClassName="lg:overflow-visible"
+      actions={(
+        <>
+          <Badge variant="secondary" className="tabular-nums">
+            API proxy: {headerApi}
+          </Badge>
+          <Button type="button" variant="outline" onClick={() => router.push("/search")}>
+            <Search className="size-4" aria-hidden="true" />
+            Search tools
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Toggle dark mode"
+            onClick={toggleTheme}
+          >
+            {theme === "dark" ? (
+              <Sun className="size-4" aria-hidden="true" />
+            ) : (
+              <Moon className="size-4" aria-hidden="true" />
+            )}
+          </Button>
+        </>
+      )}
+      left={(
+        <Card className="bg-card/90">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base text-balance">Session controls</CardTitle>
+            <CardDescription className="text-pretty">
+              Keep chapter navigation, translation selection, and token filters docked while reading.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="space-y-2">
               <Select
                 value={String(chapterNumber)}
                 onValueChange={(value) => navigateToVerse(Number(value), 1)}
@@ -775,7 +734,7 @@ export function ReaderShell({ locationParam }: Props) {
                 </SelectContent>
               </Select>
 
-              <div className="flex items-center gap-2 md:justify-end">
+              <div className="grid gap-2 sm:grid-cols-[auto_auto_1fr]">
                 <Button
                   type="button"
                   variant="outline"
@@ -801,7 +760,7 @@ export function ReaderShell({ locationParam }: Props) {
                   onValueChange={(value) => navigateToVerse(chapterNumber, Number(value))}
                   disabled={!activeChapter}
                 >
-                  <SelectTrigger aria-label="Select verse" className="w-24 tabular-nums">
+                  <SelectTrigger aria-label="Select verse" className="tabular-nums">
                     <SelectValue placeholder="#" />
                   </SelectTrigger>
                   <SelectContent>
@@ -858,7 +817,7 @@ export function ReaderShell({ locationParam }: Props) {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 rounded-md border p-2">
               <Button
                 variant={showTranslations ? "default" : "outline"}
                 size="sm"
@@ -890,12 +849,11 @@ export function ReaderShell({ locationParam }: Props) {
                 Stats
               </Button>
             </div>
+
             {availablePosTags.length > 0 && (
               <div className="space-y-2 rounded-md border p-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <p className="text-xs text-muted-foreground">
-                    POS filter ({selectedPosTags.length})
-                  </p>
+                  <p className="text-xs text-muted-foreground">POS filter ({selectedPosTags.length})</p>
                   <Button
                     type="button"
                     variant="ghost"
@@ -926,6 +884,7 @@ export function ReaderShell({ locationParam }: Props) {
                 </ToggleGroup>
               </div>
             )}
+
             {readerView && (
               <p className="text-xs text-muted-foreground text-pretty">
                 Reader view mirrors the legacy flow and focuses on Arabic token stream.
@@ -937,9 +896,7 @@ export function ReaderShell({ locationParam }: Props) {
               </p>
             )}
 
-            {translationError && (
-              <p className="text-sm text-destructive text-pretty">{translationError}</p>
-            )}
+            {translationError && <p className="text-sm text-destructive text-pretty">{translationError}</p>}
             {metadataError && (
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-sm text-destructive text-pretty">{metadataError}</p>
@@ -963,21 +920,19 @@ export function ReaderShell({ locationParam }: Props) {
             )}
 
             {showHeaderStats && (
-              <div className="grid gap-2 md:grid-cols-3">
-                <Card>
+              <div className="grid gap-2">
+                <Card className="bg-background/80">
                   <CardContent className="flex items-center gap-2 p-3">
                     <Layers3 className="size-4 text-primary" aria-hidden="true" />
                     <div>
                       <p className="text-xs text-muted-foreground">Loaded verses</p>
                       <p className="text-sm font-semibold tabular-nums">
-                        {verses.length === 0
-                          ? "-"
-                          : `${verseBoundaries.firstVerse}-${verseBoundaries.lastVerse}`}
+                        {verses.length === 0 ? "-" : `${verseBoundaries.firstVerse}-${verseBoundaries.lastVerse}`}
                       </p>
                     </div>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="bg-background/80">
                   <CardContent className="flex items-center gap-2 p-3">
                     <Target className="size-4 text-primary" aria-hidden="true" />
                     <div>
@@ -988,7 +943,7 @@ export function ReaderShell({ locationParam }: Props) {
                     </div>
                   </CardContent>
                 </Card>
-                <Card>
+                <Card className="bg-background/80">
                   <CardContent className="flex items-center gap-2 p-3">
                     <Filter className="size-4 text-primary" aria-hidden="true" />
                     <div>
@@ -999,319 +954,307 @@ export function ReaderShell({ locationParam }: Props) {
                 </Card>
               </div>
             )}
-          </div>
-        </div>
-      </header>
+          </CardContent>
+        </Card>
+      )}
+      main={(
+        <Card className="bg-card/90">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base text-balance">Reader stream</CardTitle>
+            <CardDescription className="text-pretty">
+              Load additional verses while staying anchored to token-level morphology work.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void loadPreviousVerses()}
+                disabled={initialLoading || loadingPrevious || !hasPrevious}
+              >
+                {loadingPrevious && <Loader2 className="size-4" aria-hidden="true" />}
+                <ChevronUp className="size-4" aria-hidden="true" />
+                Load previous verses
+              </Button>
+              <div className="text-xs text-muted-foreground tabular-nums">
+                Chapter {chapterNumber} of {metadata?.chapters.length ?? 114}
+              </div>
+            </div>
 
-      <main className="container py-4">
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <section className="space-y-3">
-            <Card>
-              <CardHeader className="pb-4">
-                <CardTitle className="text-base text-balance">Reader stream</CardTitle>
-                <CardDescription className="text-pretty">
-                  Load additional verses while staying anchored to token-level morphology work.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => void loadPreviousVerses()}
-                    disabled={initialLoading || loadingPrevious || !hasPrevious}
-                  >
-                    {loadingPrevious && <Loader2 className="size-4" aria-hidden="true" />}
-                    <ChevronUp className="size-4" aria-hidden="true" />
-                    Load previous verses
-                  </Button>
-                  <div className="text-xs text-muted-foreground tabular-nums">
-                    Chapter {chapterNumber} of {metadata?.chapters.length ?? 114}
+            <Separator />
+
+            {initialLoading ? (
+              <VerseSkeletonList />
+            ) : (
+              <div className="space-y-3">
+                {showChapterOpeningLine && (
+                  <div className="rounded-md border border-dashed px-4 py-3">
+                    {hasBismillah ? (
+                      <div className="space-y-1">
+                        <p dir="rtl" className="font-arabic text-3xl leading-none text-center">
+                          بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center text-pretty">
+                        No Bismillah for this surah (At-Tawbah).
+                      </p>
+                    )}
                   </div>
-                </div>
+                )}
 
-                <Separator />
-
-                {initialLoading ? (
-                  <VerseSkeletonList />
+                {readerView ? (
+                  <ReaderVerseStream
+                    verses={verses}
+                    selectedToken={selectedToken}
+                    isTokenVisible={isTokenVisible}
+                    hasActiveTokenFilter={hasActiveTokenFilter}
+                    onSelectToken={setSelectedToken}
+                  />
                 ) : (
                   <div className="space-y-3">
-                    {showChapterOpeningLine && (
-                      <div className="rounded-md border border-dashed px-4 py-3">
-                        {hasBismillah ? (
-                          <div className="space-y-1">
-                            <p dir="rtl" className="font-arabic text-3xl leading-none text-center">
-                              بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ
-                            </p>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground text-center text-pretty">
-                            No Bismillah for this surah (At-Tawbah).
-                          </p>
-                        )}
-                      </div>
-                    )}
+                    {verses.map((verse) => {
+                      const [chapter, verseNo] = verse.location;
 
-                    {readerView ? (
-                      <ReaderVerseStream
-                        verses={verses}
-                        selectedToken={selectedToken}
-                        isTokenVisible={isTokenVisible}
-                        hasActiveTokenFilter={hasActiveTokenFilter}
-                        onSelectToken={setSelectedToken}
-                      />
-                    ) : (
-                      <div className="space-y-3">
-                        {verses.map((verse) => {
-                          const [chapter, verseNo] = verse.location;
-
-                          return (
-                            <Card
-                              key={`${chapter}:${verseNo}`}
-                              id={toVerseId(chapter, verseNo)}
-                              className="border-dashed"
-                            >
-                              <CardHeader className="pb-3">
-                                <div className="flex items-center justify-between gap-2">
-                                  <CardTitle className="text-sm font-semibold tabular-nums">
-                                    {chapter}:{verseNo}
-                                  </CardTitle>
-                                  <div className="flex items-center gap-1">
-                                    {verse.verseMark && (
-                                      <Badge variant="secondary" className="tabular-nums">
-                                        {verse.verseMark}
-                                      </Badge>
-                                    )}
-                                    <Badge variant="outline" className="tabular-nums">
-                                      {verse.tokens.length} tokens
-                                    </Badge>
-                                  </div>
-                                </div>
-                              </CardHeader>
-                              <CardContent className="space-y-3">
-                                <div dir="rtl" className="flex flex-wrap justify-end gap-2">
-                                  {verse.tokens.map((token) => {
-                                    const arabicToken = getArabicToken(token);
-                                    const tokenLocation = token.location as [number, number, number];
-                                    const selected =
-                                      selectedToken?.[0] === tokenLocation[0] &&
-                                      selectedToken?.[1] === tokenLocation[1] &&
-                                      selectedToken?.[2] === tokenLocation[2];
-                                    const isVisible = isTokenVisible(token);
-                                    const shouldDim = !isVisible && !selected;
-
-                                    return (
-                                      <button
-                                        key={token.location.join(":")}
-                                        id={toTokenId(tokenLocation)}
-                                        type="button"
-                                        onClick={() => setSelectedToken(tokenLocation)}
-                                        className={cn(
-                                          "flex min-w-16 flex-col items-end rounded-md border px-2 py-1.5 text-right shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                                          "gap-1",
-                                          selected
-                                            ? "border-primary bg-primary/20 ring-2 ring-primary/60 ring-offset-1 ring-offset-background"
-                                            : hasActiveTokenFilter && isVisible
-                                              ? "border-primary/40 bg-primary/10"
-                                              : "border-border bg-background hover:bg-accent",
-                                          shouldDim && "opacity-30",
-                                        )}
-                                      >
-                                        <span className="font-arabic text-2xl leading-none">
-                                          {arabicToken.length > 0 ? arabicToken : token.translation}
-                                        </span>
-                                        {showPhonetic && (
-                                          <span className="max-w-40 truncate text-[11px] text-muted-foreground">
-                                            {token.phonetic}
-                                          </span>
-                                        )}
-                                        {showTranslations && (
-                                          <span className="max-w-40 truncate text-[11px] text-muted-foreground">
-                                            {token.translation}
-                                          </span>
-                                        )}
-                                        <span className="text-[10px] font-semibold text-primary tabular-nums">
-                                          {token.segments[0]?.posTag ?? "-"}
-                                        </span>
-                                      </button>
-                                    );
-                                  })}
-                                </div>
-
-                                {showTranslations && verse.translations && verse.translations.length > 0 && (
-                                  <div className="space-y-2">
-                                    <Separator />
-                                    <div className="space-y-1.5">
-                                      {verse.translations.map((translation) => (
-                                        <p key={translation.name} className="text-sm text-pretty">
-                                          <span className="font-semibold">{translation.name}:</span>{" "}
-                                          {translation.translation}
-                                        </p>
-                                      ))}
-                                    </div>
-                                  </div>
+                      return (
+                        <Card
+                          key={`${chapter}:${verseNo}`}
+                          id={toVerseId(chapter, verseNo)}
+                          className="border-dashed bg-background/80"
+                        >
+                          <CardHeader className="pb-3">
+                            <div className="flex items-center justify-between gap-2">
+                              <CardTitle className="text-sm font-semibold tabular-nums">
+                                {chapter}:{verseNo}
+                              </CardTitle>
+                              <div className="flex items-center gap-1">
+                                {verse.verseMark && (
+                                  <Badge variant="secondary" className="tabular-nums">
+                                    {verse.verseMark}
+                                  </Badge>
                                 )}
-                              </CardContent>
-                            </Card>
-                          );
-                        })}
-                      </div>
-                    )}
+                                <Badge variant="outline" className="tabular-nums">
+                                  {verse.tokens.length} tokens
+                                </Badge>
+                              </div>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            <div dir="rtl" className="flex flex-wrap justify-end gap-2">
+                              {verse.tokens.map((token) => {
+                                const arabicToken = getArabicToken(token);
+                                const tokenLocation = token.location as [number, number, number];
+                                const selected =
+                                  selectedToken?.[0] === tokenLocation[0] &&
+                                  selectedToken?.[1] === tokenLocation[1] &&
+                                  selectedToken?.[2] === tokenLocation[2];
+                                const isVisible = isTokenVisible(token);
+                                const shouldDim = !isVisible && !selected;
+
+                                return (
+                                  <button
+                                    key={token.location.join(":")}
+                                    id={toTokenId(tokenLocation)}
+                                    type="button"
+                                    onClick={() => setSelectedToken(tokenLocation)}
+                                    className={cn(
+                                      "flex min-w-16 flex-col items-end rounded-md border px-2 py-1.5 text-right shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                                      "gap-1",
+                                      selected
+                                        ? "border-primary bg-primary/20 ring-2 ring-primary/60 ring-offset-1 ring-offset-background"
+                                        : hasActiveTokenFilter && isVisible
+                                          ? "border-primary/40 bg-primary/10"
+                                          : "border-border bg-background hover:bg-accent",
+                                      shouldDim && "opacity-30",
+                                    )}
+                                  >
+                                    <span className="font-arabic text-2xl leading-none">
+                                      {arabicToken.length > 0 ? arabicToken : token.translation}
+                                    </span>
+                                    {showPhonetic && (
+                                      <span className="max-w-40 truncate text-[11px] text-muted-foreground">
+                                        {token.phonetic}
+                                      </span>
+                                    )}
+                                    {showTranslations && (
+                                      <span className="max-w-40 truncate text-[11px] text-muted-foreground">
+                                        {token.translation}
+                                      </span>
+                                    )}
+                                    <span className="text-[10px] font-semibold text-primary tabular-nums">
+                                      {token.segments[0]?.posTag ?? "-"}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            {showTranslations && verse.translations && verse.translations.length > 0 && (
+                              <div className="space-y-2">
+                                <Separator />
+                                <div className="space-y-1.5">
+                                  {verse.translations.map((translation) => (
+                                    <p key={translation.name} className="text-sm text-pretty">
+                                      <span className="font-semibold">{translation.name}:</span>{" "}
+                                      {translation.translation}
+                                    </p>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
                   </div>
                 )}
+              </div>
+            )}
 
-                <div ref={bottomSentinelRef} className="h-1" />
+            <div ref={bottomSentinelRef} className="h-1" />
 
-                <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void loadNextVerses()}
+                disabled={initialLoading || loadingNext || !hasNext}
+              >
+                {loadingNext && <Loader2 className="size-4" aria-hidden="true" />}
+                <ChevronDown className="size-4" aria-hidden="true" />
+                Load next verses
+              </Button>
+              {!hasNext && !initialLoading && (
+                <p className="text-xs text-muted-foreground text-pretty">
+                  End of chapter reached. Change chapter or verse anchor to continue.
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      right={(
+        <div className="lg:sticky lg:top-0">
+          <Card className="bg-card/90 lg:max-h-[calc(100dvh-7.5rem)] lg:overflow-hidden">
+            <CardHeader>
+              <CardTitle className="text-base text-balance">Token details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 lg:max-h-[calc(100dvh-12rem)] lg:overflow-y-auto">
+              {!selectedToken && (
+                <div className="space-y-3 rounded-md border border-dashed p-4">
+                  <p className="text-sm text-muted-foreground text-pretty">
+                    No token selected. Select a highlighted token in the reader to start analysis.
+                  </p>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => void loadNextVerses()}
-                    disabled={initialLoading || loadingNext || !hasNext}
+                    onClick={() => {
+                      const candidate = verses[0]?.tokens[0]?.location as
+                        | [number, number, number]
+                        | undefined;
+                      if (candidate) {
+                        setSelectedToken(candidate);
+                      }
+                    }}
+                    disabled={verses.length === 0}
                   >
-                    {loadingNext && <Loader2 className="size-4" aria-hidden="true" />}
-                    <ChevronDown className="size-4" aria-hidden="true" />
-                    Load next verses
+                    Select first loaded token
                   </Button>
-                  {!hasNext && !initialLoading && (
-                    <p className="text-xs text-muted-foreground text-pretty">
-                      End of chapter reached. Change chapter or verse anchor to continue.
-                    </p>
-                  )}
                 </div>
-              </CardContent>
-            </Card>
-          </section>
+              )}
 
-          <aside
-            className="lg:sticky lg:top-[var(--reader-pane-top)] lg:self-start"
-            style={paneLayoutVars}
-          >
-            <Card className="lg:flex lg:max-h-[var(--reader-pane-max-height)] lg:flex-col lg:overflow-hidden">
-              <CardHeader>
-                <CardTitle className="text-base text-balance">Token details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-                {!selectedToken && (
-                  <div className="space-y-3 rounded-md border border-dashed p-4">
-                    <p className="text-sm text-muted-foreground text-pretty">
-                      No token selected. Select a highlighted token in the reader to start analysis.
-                    </p>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        const candidate = verses[0]?.tokens[0]?.location as
-                          | [number, number, number]
-                          | undefined;
-                        if (candidate) {
-                          setSelectedToken(candidate);
-                        }
-                      }}
-                      disabled={verses.length === 0}
-                    >
-                      Select first loaded token
-                    </Button>
-                  </div>
-                )}
-
-                {selectedToken && (
-                  <div className="space-y-3">
-                    <div className="space-y-2 rounded-md border p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Selected location</p>
-                          <p className="text-sm font-semibold tabular-nums">{selectedToken.join(":")}</p>
-                        </div>
-                        <div className="flex flex-col items-end gap-2">
-                          {selectedTokenData && (
-                            <Badge variant="outline" className="tabular-nums">
-                              {selectedTokenData.segments.length} segments
-                            </Badge>
-                          )}
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={jumpToSelectedToken}
-                          >
-                            Show token
-                          </Button>
-                        </div>
+              {selectedToken && (
+                <div className="space-y-3">
+                  <div className="space-y-2 rounded-md border p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Selected location</p>
+                        <p className="text-sm font-semibold tabular-nums">{selectedToken.join(":")}</p>
                       </div>
-                      {selectedTokenArabic.length > 0 && (
-                        <p className="font-arabic text-2xl leading-none">{selectedTokenArabic}</p>
-                      )}
-                      <div className="space-y-1">
-                        <p className="text-sm text-muted-foreground text-pretty">{selectedTokenGloss}</p>
-                        {selectedTokenPhonetic.length > 0 && (
-                          <p className="text-xs text-muted-foreground text-pretty">{selectedTokenPhonetic}</p>
+                      <div className="flex flex-col items-end gap-2">
+                        {selectedTokenData && (
+                          <Badge variant="outline" className="tabular-nums">
+                            {selectedTokenData.segments.length} segments
+                          </Badge>
                         )}
-                      </div>
-                    </div>
-
-                    {wordError && (
-                      <div className="space-y-2 rounded-md border border-destructive/40 p-3">
-                        <p className="text-sm text-destructive text-pretty">{wordError}</p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            if (selectedToken) {
-                              setSelectedToken([...selectedToken] as [number, number, number]);
-                            }
-                          }}
-                        >
-                          Retry analysis
+                        <Button variant="outline" size="sm" onClick={jumpToSelectedToken}>
+                          Show token
                         </Button>
                       </div>
+                    </div>
+                    {selectedTokenArabic.length > 0 && (
+                      <p className="font-arabic text-2xl leading-none">{selectedTokenArabic}</p>
                     )}
-
-                    {wordLoading && <WordSkeleton />}
-
-                    {!wordLoading && wordMorphology && (
-                      <div className="overflow-hidden rounded-md border">
-                        <section className="space-y-1.5 p-3">
-                          <p className="text-xs text-muted-foreground">Summary</p>
-                          <p className="text-sm text-pretty">{wordMorphology.summary}</p>
-                        </section>
-                        <Separator />
-                        <section className="space-y-1.5 p-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs text-muted-foreground">Segments</p>
-                            <Badge variant="outline" className="tabular-nums">
-                              {wordMorphology.segmentDescriptions.length}
-                            </Badge>
-                          </div>
-                          {wordMorphology.segmentDescriptions.length === 0 ? (
-                            <p className="text-sm text-muted-foreground text-pretty">
-                              Segment-level notes are not yet available for this token.
-                            </p>
-                          ) : (
-                            <ul className="space-y-1.5">
-                              {wordMorphology.segmentDescriptions.map((description) => (
-                                <li key={description} className="text-sm text-pretty">
-                                  {description}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </section>
-                        <Separator />
-                        <section className="space-y-1.5 p-3">
-                          <p className="text-xs text-muted-foreground">Arabic grammar</p>
-                          <p className="text-sm text-pretty">{wordMorphology.arabicGrammar}</p>
-                        </section>
-                      </div>
-                    )}
-
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground text-pretty">{selectedTokenGloss}</p>
+                      {selectedTokenPhonetic.length > 0 && (
+                        <p className="text-xs text-muted-foreground text-pretty">{selectedTokenPhonetic}</p>
+                      )}
+                    </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          </aside>
+
+                  {wordError && (
+                    <div className="space-y-2 rounded-md border border-destructive/40 p-3">
+                      <p className="text-sm text-destructive text-pretty">{wordError}</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (selectedToken) {
+                            setSelectedToken([...selectedToken] as [number, number, number]);
+                          }
+                        }}
+                      >
+                        Retry analysis
+                      </Button>
+                    </div>
+                  )}
+
+                  {wordLoading && <WordSkeleton />}
+
+                  {!wordLoading && wordMorphology && (
+                    <div className="overflow-hidden rounded-md border">
+                      <section className="space-y-1.5 p-3">
+                        <p className="text-xs text-muted-foreground">Summary</p>
+                        <p className="text-sm text-pretty">{wordMorphology.summary}</p>
+                      </section>
+                      <Separator />
+                      <section className="space-y-1.5 p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs text-muted-foreground">Segments</p>
+                          <Badge variant="outline" className="tabular-nums">
+                            {wordMorphology.segmentDescriptions.length}
+                          </Badge>
+                        </div>
+                        {wordMorphology.segmentDescriptions.length === 0 ? (
+                          <p className="text-sm text-muted-foreground text-pretty">
+                            Segment-level notes are not yet available for this token.
+                          </p>
+                        ) : (
+                          <ul className="space-y-1.5">
+                            {wordMorphology.segmentDescriptions.map((description) => (
+                              <li key={description} className="text-sm text-pretty">
+                                {description}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </section>
+                      <Separator />
+                      <section className="space-y-1.5 p-3">
+                        <p className="text-xs text-muted-foreground">Arabic grammar</p>
+                        <p className="text-sm text-pretty">{wordMorphology.arabicGrammar}</p>
+                      </section>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
-      </main>
-    </div>
+      )}
+    />
   );
 }
 

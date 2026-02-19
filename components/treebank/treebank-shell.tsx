@@ -8,9 +8,10 @@ import { useTheme } from "@/hooks/use-theme";
 import { normalizeVerseLocation, parseLocation } from "@/lib/location";
 import { getSyntax } from "@/lib/api";
 import type { SyntaxGraph } from "@/lib/types";
+import { WorkbenchShell } from "@/components/layout/workbench-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { SyntaxGraphRenderer } from "@/components/treebank/syntax-graph-renderer";
 
@@ -91,144 +92,151 @@ export function TreebankShell({ locationParam, initialGraphNumber }: Props) {
     [router],
   );
 
+  const maxGraphNumber = Math.max(...graphOptions);
+
   return (
-    <div className="min-h-dvh bg-background pb-[calc(1rem+env(safe-area-inset-bottom))]">
-      <header
-        className="sticky top-0 z-10 border-b bg-background"
-        style={{ paddingTop: "env(safe-area-inset-top)" }}
-      >
-        <div className="container py-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="space-y-1">
-              <h1 className="text-xl font-semibold">Quranic Corpus Treebank</h1>
-              <p className="text-sm text-muted-foreground">
-                Treebank route shell for syntax graph rendering and i&apos;rab integration.
+    <WorkbenchShell
+      title="Quranic Corpus Treebank"
+      description="Console-style syntax workspace for graph rendering and i'rab inspection."
+      leftLabel="Graph Controls"
+      mainLabel="Graph Workspace"
+      rightLabel="Metadata"
+      actions={(
+        <>
+          <Badge variant="secondary" className="tabular-nums">
+            API: /syntax
+          </Badge>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => router.push(`/reader/${chapterNumber}:${verseNumber}`)}
+          >
+            <ArrowLeft className="size-4" aria-hidden="true" />
+            Reader
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            aria-label="Toggle dark mode"
+            onClick={toggleTheme}
+          >
+            {theme === "dark" ? (
+              <Sun className="size-4" aria-hidden="true" />
+            ) : (
+              <Moon className="size-4" aria-hidden="true" />
+            )}
+          </Button>
+        </>
+      )}
+      left={(
+        <Card className="bg-card/90">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-base text-balance">Navigation</CardTitle>
+            <CardDescription className="text-pretty">
+              Control graph number and move between adjacent graphs.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="secondary" className="tabular-nums">
+                Verse: {chapterNumber}:{verseNumber}
+              </Badge>
+              {graphData?.legacyCorpusGraphNumber != null && graphData.legacyCorpusGraphNumber > 0 && (
+                <Badge variant="outline" className="tabular-nums">
+                  Legacy graph #{graphData.legacyCorpusGraphNumber}
+                </Badge>
+              )}
+            </div>
+
+            <div className="space-y-1 rounded-md border p-3">
+              <label htmlFor="graph-number" className="text-xs text-muted-foreground">
+                Graph number
+              </label>
+              <Input
+                id="graph-number"
+                type="number"
+                min={1}
+                max={maxGraphNumber}
+                value={graphNumber}
+                onChange={(event) => onGraphChange(event.target.value)}
+                className="tabular-nums"
+              />
+              <p className="text-xs text-muted-foreground tabular-nums">
+                Range: 1 to {maxGraphNumber}
               </p>
             </div>
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="outline" onClick={() => router.push(`/reader/${chapterNumber}:${verseNumber}`)}>
-                <ArrowLeft className="size-4" aria-hidden="true" />
-                Reader
+
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => goToGraphLocation(graphData?.prev)}
+                disabled={!graphData?.prev}
+              >
+                <ChevronLeft className="size-4" aria-hidden="true" />
+                Previous graph
               </Button>
               <Button
                 type="button"
                 variant="outline"
-                size="icon"
-                aria-label="Toggle dark mode"
-                onClick={toggleTheme}
+                size="sm"
+                onClick={() => goToGraphLocation(graphData?.next)}
+                disabled={!graphData?.next}
               >
-                {theme === "dark" ? (
-                  <Sun className="size-4" aria-hidden="true" />
-                ) : (
-                  <Moon className="size-4" aria-hidden="true" />
-                )}
+                Next graph
+                <ChevronRight className="size-4" aria-hidden="true" />
               </Button>
             </div>
-          </div>
-        </div>
-      </header>
 
-      <main className="container py-4">
-        <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary">Verse: {chapterNumber}:{verseNumber}</Badge>
-            <Badge variant="outline">API: /syntax</Badge>
-            {graphData?.legacyCorpusGraphNumber != null && graphData.legacyCorpusGraphNumber > 0 && (
-              <Badge variant="outline">Legacy graph #{graphData.legacyCorpusGraphNumber}</Badge>
+            {isLoading && (
+              <div className="flex items-center gap-2 rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                Loading syntax graph...
+              </div>
             )}
-          </div>
 
-          <div className="space-y-1">
-            <label htmlFor="graph-number" className="text-xs text-muted-foreground">
-              Graph number
-            </label>
-            <Input
-              id="graph-number"
-              type="number"
-              min={1}
-              max={Math.max(...graphOptions)}
-              value={graphNumber}
-              onChange={(event) => onGraphChange(event.target.value)}
-              className="w-28"
-            />
-          </div>
-        </div>
-
-        {isLoading && (
-          <Card className="mt-4">
-            <CardContent className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
-              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-              Loading syntax graph...
-            </CardContent>
-          </Card>
-        )}
-
-        {error && !isLoading && (
-          <Card className="mt-4 border-destructive/40">
-            <CardContent className="p-4">
-              <p className="text-sm text-destructive">{error}</p>
-            </CardContent>
-          </Card>
-        )}
-
-        {graphData && !isLoading && (
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">
-                  Graph metadata ({graphData.graphNumber}/{graphData.graphCount})
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => goToGraphLocation(graphData.prev)}
-                    disabled={!graphData.prev}
-                  >
-                    <ChevronLeft className="size-4" aria-hidden="true" />
-                    Previous graph
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => goToGraphLocation(graphData.next)}
-                    disabled={!graphData.next}
-                  >
-                    Next graph
-                    <ChevronRight className="size-4" aria-hidden="true" />
-                  </Button>
-                </div>
-                <p>
-                  Previous:{" "}
-                  {graphData.prev ? `${graphData.prev.location.join(":")} (${graphData.prev.graphNumber})` : "-"}
-                </p>
-                <p>
-                  Next: {graphData.next ? `${graphData.next.location.join(":")} (${graphData.next.graphNumber})` : "-"}
-                </p>
-                <p>Words: {graphData.words.length}</p>
-                <p>Edges: {graphData.edges.length}</p>
-                <p>Phrase nodes: {graphData.phraseNodes?.length ?? 0}</p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Renderer</CardTitle>
-              </CardHeader>
-              <CardContent>
+            {error && (
+              <div className="space-y-2 rounded-md border border-destructive/40 p-3">
+                <p className="text-sm text-destructive text-pretty">{error}</p>
+                <Button type="button" variant="outline" size="sm" onClick={() => void loadGraph()}>
+                  Retry graph
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+      main={(
+        <>
+          <Card className="bg-card/90">
+            <CardHeader>
+              <CardTitle className="text-base text-balance">Renderer</CardTitle>
+              <CardDescription className="text-pretty">
+                Syntax graph renderer for verse {chapterNumber}:{verseNumber}.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {graphData ? (
                 <SyntaxGraphRenderer graph={graphData} />
-              </CardContent>
-            </Card>
+              ) : (
+                <div className="rounded-md border border-dashed p-4 text-sm text-muted-foreground text-pretty">
+                  Graph renderer will appear after data loads.
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-            <Card className="lg:col-span-2">
-              <CardHeader>
-                <CardTitle className="text-base">Words snapshot</CardTitle>
-              </CardHeader>
-              <CardContent className="overflow-x-auto">
+          <Card className="bg-card/90">
+            <CardHeader>
+              <CardTitle className="text-base text-balance">Words snapshot</CardTitle>
+              <CardDescription className="text-pretty">
+                Token and node mapping for the currently selected graph.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              {graphData ? (
                 <table className="w-full min-w-[720px] text-left text-sm">
                   <thead className="border-b">
                     <tr>
@@ -241,27 +249,79 @@ export function TreebankShell({ locationParam, initialGraphNumber }: Props) {
                   </thead>
                   <tbody>
                     {graphData.words.map((word, index) => (
-                      <tr key={`${word.startNode}-${word.endNode}-${word.type}-${index}`} className="border-b align-top">
+                      <tr
+                        key={`${word.startNode}-${word.endNode}-${word.type}-${index}`}
+                        className="border-b align-top"
+                      >
                         <td className="py-2 pr-3">{word.type}</td>
                         <td className="py-2 pr-3">
                           {word.token?.segments.map((segment) => segment.arabic ?? "").join("") || word.elidedText || "-"}
                         </td>
                         <td className="py-2 pr-3">{word.elidedPosTag ?? "-"}</td>
-                        <td className="py-2 pr-3">
-                          {word.token?.location.join(":") ?? "-"}
-                        </td>
-                        <td className="py-2 pr-3">
+                        <td className="py-2 pr-3 tabular-nums">{word.token?.location.join(":") ?? "-"}</td>
+                        <td className="py-2 pr-3 tabular-nums">
                           {word.startNode} {"->"} {word.endNode}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-      </main>
-    </div>
+              ) : (
+                <p className="text-sm text-muted-foreground text-pretty">
+                  No word rows available until a graph is loaded.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+      right={(
+        <>
+          <Card className="bg-card/90">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base text-balance">Graph metadata</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex items-center justify-between gap-2 rounded-md border p-2 tabular-nums">
+                <span className="text-muted-foreground">Graph</span>
+                <span>{graphData ? `${graphData.graphNumber}/${graphData.graphCount}` : "-"}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2 rounded-md border p-2 tabular-nums">
+                <span className="text-muted-foreground">Words</span>
+                <span>{graphData?.words.length ?? 0}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2 rounded-md border p-2 tabular-nums">
+                <span className="text-muted-foreground">Edges</span>
+                <span>{graphData?.edges.length ?? 0}</span>
+              </div>
+              <div className="flex items-center justify-between gap-2 rounded-md border p-2 tabular-nums">
+                <span className="text-muted-foreground">Phrase nodes</span>
+                <span>{graphData?.phraseNodes?.length ?? 0}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-card/90">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-base text-balance">Graph neighbors</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <p className="rounded-md border p-2 text-pretty tabular-nums">
+                Previous:{" "}
+                {graphData?.prev
+                  ? `${graphData.prev.location.join(":")} (${graphData.prev.graphNumber})`
+                  : "-"}
+              </p>
+              <p className="rounded-md border p-2 text-pretty tabular-nums">
+                Next:{" "}
+                {graphData?.next
+                  ? `${graphData.next.location.join(":")} (${graphData.next.graphNumber})`
+                  : "-"}
+              </p>
+            </CardContent>
+          </Card>
+        </>
+      )}
+    />
   );
 }

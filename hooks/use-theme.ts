@@ -22,7 +22,7 @@ function getStoredTheme(): Theme | null {
 
 function resolveTheme(): Theme {
   if (typeof window === "undefined") {
-    return "light";
+    return "dark";
   }
 
   const stored = getStoredTheme();
@@ -34,7 +34,7 @@ function resolveTheme(): Theme {
     return "dark";
   }
 
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return "dark";
 }
 
 function notifySubscribers() {
@@ -76,7 +76,7 @@ function applyTheme(theme: Theme) {
 }
 
 export function useTheme() {
-  const theme = useSyncExternalStore(subscribe, resolveTheme, () => "light");
+  const theme = useSyncExternalStore(subscribe, resolveTheme, () => "dark");
 
   const setTheme = useCallback<Dispatch<SetStateAction<Theme>>>((value) => {
     const current = resolveTheme();
