@@ -23,6 +23,11 @@
     --border: 210 24% 88%;
     --input: 210 24% 88%;
     --ring: 36 95% 45%;
+    --ling-noun: 162 72% 32%;
+    --ling-verb: 212 88% 44%;
+    --ling-particle: 38 92% 40%;
+    --ling-pronoun: 352 70% 44%;
+    --ling-other: 190 84% 38%;
     --radius: 0.75rem;
   }
 
@@ -46,6 +51,11 @@
     --border: 220 10% 24%;
     --input: 220 10% 24%;
     --ring: 36 94% 56%;
+    --ling-noun: 162 68% 58%;
+    --ling-verb: 212 86% 66%;
+    --ling-particle: 38 88% 62%;
+    --ling-pronoun: 352 74% 67%;
+    --ling-other: 190 82% 64%;
   }
 
   * {

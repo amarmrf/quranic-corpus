@@ -25,7 +25,12 @@ type WorkbenchPaneProps = {
   contentClassName?: string;
 };
 
-function WorkbenchPane({ children, label, className, contentClassName }: WorkbenchPaneProps) {
+function WorkbenchPane({
+  children,
+  label,
+  className,
+  contentClassName,
+}: WorkbenchPaneProps) {
   return (
     <section className={cn("rounded-lg border bg-card/70 shadow-sm lg:min-h-0", className)}>
       {label && (

@@ -20,6 +20,11 @@ import {
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { useTheme } from "@/hooks/use-theme";
 import { getMetadata, getMorphology, getWordMorphology } from "@/lib/api";
+import {
+  LINGUISTIC_LEGEND,
+  getLinguisticColor,
+  getLinguisticToneColor,
+} from "@/lib/linguistic-colors";
 import { normalizeVerseLocation, parseLocation, toTokenId, toVerseId } from "@/lib/location";
 import type { Chapter, Token, Verse, WordMorphology } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -83,6 +88,17 @@ function toArabicNumber(value: number) {
     .split("")
     .map((digit) => digits[Number(digit)] ?? digit)
     .join("");
+}
+
+function getFilteredTokenStyle(posTag: string | undefined, highlighted: boolean, selected: boolean) {
+  if (!highlighted || selected) {
+    return undefined;
+  }
+
+  return {
+    borderColor: getLinguisticColor(posTag, 0.55),
+    backgroundColor: getLinguisticColor(posTag, 0.14),
+  };
 }
 
 export function ReaderShell({ locationParam }: Props) {
@@ -882,6 +898,24 @@ export function ReaderShell({ locationParam }: Props) {
                     </ToggleGroupItem>
                   ))}
                 </ToggleGroup>
+                <div className="space-y-1 rounded-md border border-dashed p-2">
+                  <p className="text-xs text-muted-foreground">POS color key</p>
+                  <div className="flex flex-wrap gap-1">
+                    {LINGUISTIC_LEGEND.map((entry) => (
+                      <Badge
+                        key={entry.tone}
+                        variant="outline"
+                        style={{
+                          borderColor: getLinguisticToneColor(entry.tone, 0.45),
+                          backgroundColor: getLinguisticToneColor(entry.tone, 0.14),
+                          color: getLinguisticToneColor(entry.tone),
+                        }}
+                      >
+                        {entry.label}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -923,7 +957,7 @@ export function ReaderShell({ locationParam }: Props) {
               <div className="grid gap-2">
                 <Card className="bg-background/80">
                   <CardContent className="flex items-center gap-2 p-3">
-                    <Layers3 className="size-4 text-primary" aria-hidden="true" />
+                    <Layers3 className="size-4 text-sky-600 dark:text-sky-300" aria-hidden="true" />
                     <div>
                       <p className="text-xs text-muted-foreground">Loaded verses</p>
                       <p className="text-sm font-semibold tabular-nums">
@@ -934,7 +968,7 @@ export function ReaderShell({ locationParam }: Props) {
                 </Card>
                 <Card className="bg-background/80">
                   <CardContent className="flex items-center gap-2 p-3">
-                    <Target className="size-4 text-primary" aria-hidden="true" />
+                    <Target className="size-4 text-emerald-600 dark:text-emerald-300" aria-hidden="true" />
                     <div>
                       <p className="text-xs text-muted-foreground">Visible tokens</p>
                       <p className="text-sm font-semibold tabular-nums">
@@ -945,7 +979,7 @@ export function ReaderShell({ locationParam }: Props) {
                 </Card>
                 <Card className="bg-background/80">
                   <CardContent className="flex items-center gap-2 p-3">
-                    <Filter className="size-4 text-primary" aria-hidden="true" />
+                    <Filter className="size-4 text-amber-600 dark:text-amber-300" aria-hidden="true" />
                     <div>
                       <p className="text-xs text-muted-foreground">POS filters</p>
                       <p className="text-sm font-semibold tabular-nums">{selectedPosTags.length}</p>
@@ -1045,12 +1079,18 @@ export function ReaderShell({ locationParam }: Props) {
                               {verse.tokens.map((token) => {
                                 const arabicToken = getArabicToken(token);
                                 const tokenLocation = token.location as [number, number, number];
+                                const posTag = token.segments[0]?.posTag;
                                 const selected =
                                   selectedToken?.[0] === tokenLocation[0] &&
                                   selectedToken?.[1] === tokenLocation[1] &&
                                   selectedToken?.[2] === tokenLocation[2];
                                 const isVisible = isTokenVisible(token);
                                 const shouldDim = !isVisible && !selected;
+                                const tokenHighlightStyle = getFilteredTokenStyle(
+                                  posTag,
+                                  hasActiveTokenFilter && isVisible,
+                                  selected,
+                                );
 
                                 return (
                                   <button
@@ -1063,11 +1103,10 @@ export function ReaderShell({ locationParam }: Props) {
                                       "gap-1",
                                       selected
                                         ? "border-primary bg-primary/20 ring-2 ring-primary/60 ring-offset-1 ring-offset-background"
-                                        : hasActiveTokenFilter && isVisible
-                                          ? "border-primary/40 bg-primary/10"
-                                          : "border-border bg-background hover:bg-accent",
+                                        : "border-border bg-background hover:bg-accent",
                                       shouldDim && "opacity-30",
                                     )}
+                                    style={tokenHighlightStyle}
                                   >
                                     <span className="font-arabic text-2xl leading-none">
                                       {arabicToken.length > 0 ? arabicToken : token.translation}
@@ -1082,8 +1121,11 @@ export function ReaderShell({ locationParam }: Props) {
                                         {token.translation}
                                       </span>
                                     )}
-                                    <span className="text-[10px] font-semibold text-primary tabular-nums">
-                                      {token.segments[0]?.posTag ?? "-"}
+                                    <span
+                                      className="text-[10px] font-semibold tabular-nums"
+                                      style={{ color: getLinguisticColor(posTag) }}
+                                    >
+                                      {posTag ?? "-"}
                                     </span>
                                   </button>
                                 );
@@ -1289,6 +1331,7 @@ function ReaderVerseStream({
               )}
               {verse.tokens.map((token) => {
                 const tokenLocation = token.location as [number, number, number];
+                const posTag = token.segments[0]?.posTag;
                 const selected =
                   selectedToken?.[0] === tokenLocation[0] &&
                   selectedToken?.[1] === tokenLocation[1] &&
@@ -1296,6 +1339,11 @@ function ReaderVerseStream({
                 const isVisible = isTokenVisible(token);
                 const shouldDim = !isVisible && !selected;
                 const arabicToken = getArabicToken(token);
+                const tokenHighlightStyle = getFilteredTokenStyle(
+                  posTag,
+                  hasActiveTokenFilter && isVisible,
+                  selected,
+                );
 
                 return (
                   <button
@@ -1308,11 +1356,10 @@ function ReaderVerseStream({
                       "rounded-sm border border-transparent px-1.5 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                       selected
                         ? "border-primary bg-primary/20 ring-2 ring-primary/60 ring-offset-1 ring-offset-background"
-                        : hasActiveTokenFilter && isVisible
-                          ? "border-primary/40 bg-primary/10"
-                          : "hover:bg-accent",
+                        : "hover:bg-accent",
                       shouldDim && "opacity-30",
                     )}
+                    style={tokenHighlightStyle}
                   >
                     <span className="font-arabic text-3xl leading-none">
                       {arabicToken.length > 0 ? arabicToken : token.translation}
@@ -1323,7 +1370,10 @@ function ReaderVerseStream({
               {verse.verseMark === "sajdah" && (
                 <span className="font-arabic text-3xl leading-none text-muted-foreground">۩</span>
               )}
-              <span className="font-arabic text-2xl leading-none text-primary/80">
+              <span
+                className="font-arabic text-2xl leading-none"
+                style={{ color: getLinguisticToneColor("particle", 0.9) }}
+              >
                 {toArabicNumber(verseNo)}
               </span>
             </div>

@@ -7,6 +7,10 @@ import { ArrowRight, BookOpenText, CircleHelp, Loader2, Moon, Search, Sun } from
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { useTheme } from "@/hooks/use-theme";
 import { getConcordance, getDictionary, getDictionaryIndex, getMetadata, getSearch } from "@/lib/api";
+import {
+  getLinguisticToneColor,
+  type LinguisticTone,
+} from "@/lib/linguistic-colors";
 import type {
   ConcordanceResponse,
   DictionaryIndexEntry,
@@ -84,6 +88,16 @@ const LINGUISTIC_TERMS: { term: string; description: string }[] = [
     description: "List of every occurrence of a query with local context for comparison across verses.",
   },
 ];
+
+function getActiveTabTone(tab: ActiveTab): LinguisticTone {
+  if (tab === "search") {
+    return "verb";
+  }
+  if (tab === "dictionary") {
+    return "noun";
+  }
+  return "other";
+}
 
 export function SearchShell() {
   const router = useRouter();
@@ -247,6 +261,7 @@ export function SearchShell() {
   const dictionaryStartsWithLabel =
     dictionaryStartsWith === "all" ? "All letters" : `Letter ${dictionaryStartsWith}`;
   const hasSharedFilters = exact || diacritics || chapter !== "all";
+  const activeToolTone = getActiveTabTone(activeTab);
   const normalizeDictionaryValue = useCallback(
     (value: string) => {
       const trimmed = value.trim();
@@ -955,31 +970,44 @@ export function SearchShell() {
       )}
       right={(
         <>
-          <Card className="border-primary/30 bg-card">
+          <Card className="border bg-card">
             <CardHeader className="pb-3">
               <CardTitle className="text-base text-balance">Session status</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-2 text-sm">
               <div className="flex items-center justify-between gap-2 rounded-md border p-2">
                 <span className="text-muted-foreground">Active tool</span>
-                <Badge variant="secondary">{activeTab}</Badge>
+                <Badge
+                  variant="outline"
+                  style={{
+                    borderColor: getLinguisticToneColor(activeToolTone, 0.5),
+                    backgroundColor: getLinguisticToneColor(activeToolTone, 0.14),
+                    color: getLinguisticToneColor(activeToolTone),
+                  }}
+                >
+                  {activeTab}
+                </Badge>
               </div>
               <div className="flex items-center justify-between gap-2 rounded-md border p-2 tabular-nums">
                 <span className="text-muted-foreground">Search rows</span>
-                <span>{searchData?.results.length ?? 0}</span>
+                <span style={{ color: getLinguisticToneColor("verb") }}>{searchData?.results.length ?? 0}</span>
               </div>
               <div className="flex items-center justify-between gap-2 rounded-md border p-2 tabular-nums">
                 <span className="text-muted-foreground">Dictionary rows</span>
-                <span>{dictionaryOccurrences?.results.length ?? 0}</span>
+                <span style={{ color: getLinguisticToneColor("noun") }}>
+                  {dictionaryOccurrences?.results.length ?? 0}
+                </span>
               </div>
               <div className="flex items-center justify-between gap-2 rounded-md border p-2 tabular-nums">
                 <span className="text-muted-foreground">Concordance rows</span>
-                <span>{concordanceData?.results.length ?? 0}</span>
+                <span style={{ color: getLinguisticToneColor("other") }}>
+                  {concordanceData?.results.length ?? 0}
+                </span>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-primary/30 bg-card">
+          <Card className="border bg-card">
             <CardHeader>
               <CardTitle className="text-base text-balance">Linguistic terms</CardTitle>
               <CardDescription className="text-pretty">
@@ -1060,7 +1088,7 @@ function ResultRow({
                 key={`${location}-context-${absoluteIndex}`}
                 className={cn(
                   "mx-0.5 inline-block rounded px-1 py-0.5",
-                  isMatch ? "bg-primary/20 text-primary" : "text-foreground",
+                  isMatch ? "bg-sky-500/20 text-sky-700 dark:text-sky-300" : "text-foreground",
                 )}
               >
                 {token}
@@ -1080,12 +1108,28 @@ function ResultRow({
       )}
       <div className="mt-2 flex flex-wrap gap-2">
         {entry.lemmas.slice(0, 3).map((lemma) => (
-          <Badge key={`lemma-${lemma.key}`} variant="secondary">
+          <Badge
+            key={`lemma-${lemma.key}`}
+            variant="outline"
+            style={{
+              borderColor: getLinguisticToneColor("noun", 0.5),
+              backgroundColor: getLinguisticToneColor("noun", 0.14),
+              color: getLinguisticToneColor("noun"),
+            }}
+          >
             LEM: {lemma.key}
           </Badge>
         ))}
         {entry.roots.slice(0, 3).map((root) => (
-          <Badge key={`root-${root.key}`} variant="secondary">
+          <Badge
+            key={`root-${root.key}`}
+            variant="outline"
+            style={{
+              borderColor: getLinguisticToneColor("verb", 0.5),
+              backgroundColor: getLinguisticToneColor("verb", 0.14),
+              color: getLinguisticToneColor("verb"),
+            }}
+          >
             ROOT: {root.key}
           </Badge>
         ))}
@@ -1121,7 +1165,14 @@ function highlightQuery(value: string, query: string | undefined): ReactNode {
   return parts.map((part, index) => {
     if (part.toLowerCase() === normalizedQuery.toLowerCase()) {
       return (
-        <mark key={`match-${index}`} className="rounded-sm bg-primary/20 px-0.5 text-primary">
+        <mark
+          key={`match-${index}`}
+          className="rounded-sm px-0.5"
+          style={{
+            backgroundColor: getLinguisticToneColor("verb", 0.2),
+            color: getLinguisticToneColor("verb"),
+          }}
+        >
           {part}
         </mark>
       );

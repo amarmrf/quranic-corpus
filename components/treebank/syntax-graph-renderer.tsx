@@ -1,4 +1,5 @@
 import type { SyntaxGraph } from "@/lib/types";
+import { getLinguisticColor } from "@/lib/linguistic-colors";
 
 type Props = {
   graph: SyntaxGraph;
@@ -98,13 +99,14 @@ export function SyntaxGraphRenderer({ graph }: Props) {
           const endY = nodesY;
           const arrowLeft = from > to;
           const labelY = topY - 6;
+          const dependencyColor = getLinguisticColor(edge.dependencyTag, 0.85);
 
           return (
             <g key={`edge-${index}`}>
               <path
                 d={`M ${from} ${nodesY} Q ${controlX} ${controlY} ${to} ${nodesY}`}
                 fill="none"
-                stroke="hsl(var(--muted-foreground) / 0.9)"
+                stroke={dependencyColor}
                 strokeWidth={1.8}
               />
               <polygon
@@ -113,7 +115,7 @@ export function SyntaxGraphRenderer({ graph }: Props) {
                     ? `${endX},${endY} ${endX + 9},${endY - 3.5} ${endX + 9},${endY + 3.5}`
                     : `${endX},${endY} ${endX - 9},${endY - 3.5} ${endX - 9},${endY + 3.5}`
                 }
-                fill="hsl(var(--muted-foreground) / 0.9)"
+                fill={dependencyColor}
               />
               <rect
                 x={controlX - Math.max(26, edge.dependencyTag.length * 3.6)}
@@ -122,13 +124,14 @@ export function SyntaxGraphRenderer({ graph }: Props) {
                 width={Math.max(52, edge.dependencyTag.length * 7.2)}
                 height={20}
                 fill="hsl(var(--background) / 0.9)"
-                stroke="hsl(var(--border))"
+                stroke={getLinguisticColor(edge.dependencyTag, 0.4)}
               />
               <text
                 x={controlX}
                 y={labelY - 1}
                 textAnchor="middle"
-                className="fill-muted-foreground text-[11px] font-medium"
+                fill={getLinguisticColor(edge.dependencyTag, 0.95)}
+                className="text-[11px] font-semibold"
               >
                 {edge.dependencyTag}
               </text>
@@ -144,13 +147,20 @@ export function SyntaxGraphRenderer({ graph }: Props) {
           const left = Math.min(start, end);
           const right = Math.max(start, end);
           const mid = (left + right) / 2;
+          const phraseColor = getLinguisticColor(phraseNode.phraseTag, 0.82);
 
           return (
             <g key={`phrase-${index}`}>
-              <line x1={left} y1={y} x2={right} y2={y} stroke="hsl(var(--primary) / 0.55)" strokeWidth={2} />
-              <circle cx={left} cy={y} r={4} fill="hsl(var(--primary) / 0.75)" />
-              <circle cx={right} cy={y} r={4} fill="hsl(var(--primary) / 0.75)" />
-              <text x={mid} y={y - 8} textAnchor="middle" className="fill-primary text-[11px] font-semibold">
+              <line x1={left} y1={y} x2={right} y2={y} stroke={phraseColor} strokeWidth={2} />
+              <circle cx={left} cy={y} r={4} fill={phraseColor} />
+              <circle cx={right} cy={y} r={4} fill={phraseColor} />
+              <text
+                x={mid}
+                y={y - 8}
+                textAnchor="middle"
+                fill={getLinguisticColor(phraseNode.phraseTag)}
+                className="text-[11px] font-semibold"
+              >
                 {phraseNode.phraseTag}
               </text>
             </g>
@@ -203,7 +213,13 @@ export function SyntaxGraphRenderer({ graph }: Props) {
                 {arabic}
               </text>
               {posTag.length > 0 && (
-                <text x={center} y={wordsY + 20} textAnchor="middle" className="fill-muted-foreground text-[10px]">
+                <text
+                  x={center}
+                  y={wordsY + 20}
+                  textAnchor="middle"
+                  fill={getLinguisticColor(posTag)}
+                  className="text-[10px] font-semibold"
+                >
                   {posTag}
                 </text>
               )}
