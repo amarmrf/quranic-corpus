@@ -52,9 +52,9 @@ const SORT_OPTIONS: { value: SearchSort; label: string }[] = [
 ];
 
 const GROUP_BY_OPTIONS: { value: SearchGroupBy; label: string }[] = [
-  { value: "none", label: "No grouping" },
-  { value: "lemma", label: "Group by lemma" },
-  { value: "root", label: "Group by root" },
+  { value: "none", label: "None" },
+  { value: "lemma", label: "Lemma" },
+  { value: "root", label: "Root" },
 ];
 
 const ARABIC_LETTERS = ["all", "ا", "ب", "ت", "ث", "ج", "ح", "خ", "د", "ذ", "ر", "ز", "س", "ش", "ص", "ض", "ط", "ظ", "ع", "غ", "ف", "ق", "ك", "ل", "م", "ن", "ه", "و", "ي"] as const;
