@@ -120,6 +120,8 @@ export type SearchResult = {
   location: [number, number, number];
   verseLocation: [number, number];
   tokenArabic: string;
+  verseArabicTokens?: string[];
+  matchedTokenIndex?: number;
   phonetic: string;
   gloss: string;
   lemmas: LexemeRef[];

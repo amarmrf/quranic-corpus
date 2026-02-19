@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, BookOpenText, CircleHelp, Loader2, Moon, Search, Sun } from "lucide-react";
 
@@ -841,7 +841,12 @@ export function SearchShell() {
 
             {activeTab === "search" &&
               (searchData?.results ?? []).map((entry) => (
-                <ResultRow key={entry.location.join(":")} entry={entry} onOpenReader={router.push} />
+                <ResultRow
+                  key={entry.location.join(":")}
+                  entry={entry}
+                  onOpenReader={router.push}
+                  queryText={searchData?.query.q}
+                />
               ))}
 
             {activeTab === "dictionary" && (
@@ -872,6 +877,7 @@ export function SearchShell() {
                     entry={entry}
                     onOpenReader={router.push}
                     showMorphology
+                    queryText={dictionaryOccurrences?.query.q}
                   />
                 ))}
                 {dictionaryData &&
@@ -894,7 +900,12 @@ export function SearchShell() {
                 )}
                 {concordanceGroupBy === "none"
                   ? (concordanceData?.results ?? []).map((entry) => (
-                      <ResultRow key={entry.location.join(":")} entry={entry} onOpenReader={router.push} />
+                      <ResultRow
+                        key={entry.location.join(":")}
+                        entry={entry}
+                        onOpenReader={router.push}
+                        queryText={concordanceData?.query.q}
+                      />
                     ))
                   : (concordanceData?.groups ?? []).map((group) => (
                       <Card key={`${group.type}:${group.key}`} className="border-dashed bg-background/80">
@@ -911,6 +922,7 @@ export function SearchShell() {
                               entry={entry}
                               onOpenReader={router.push}
                               compact
+                              queryText={concordanceData?.query.q}
                             />
                           ))}
                         </CardContent>
@@ -996,14 +1008,28 @@ function ResultRow({
   onOpenReader,
   compact = false,
   showMorphology = false,
+  queryText,
 }: {
   entry: SearchResponse["results"][number];
   onOpenReader: (href: string) => void;
   compact?: boolean;
   showMorphology?: boolean;
+  queryText?: string;
 }) {
   const location = entry.location.join(":");
   const readerHref = `/reader/${entry.verseLocation[0]}:${entry.verseLocation[1]}`;
+  const verseArabicTokens = entry.verseArabicTokens ?? [];
+  const hasArabicContext = verseArabicTokens.length > 0;
+  const rawMatchedTokenIndex = entry.matchedTokenIndex ?? Math.max(entry.location[2] - 1, 0);
+  const matchedTokenIndex = hasArabicContext
+    ? Math.min(Math.max(rawMatchedTokenIndex, 0), verseArabicTokens.length - 1)
+    : 0;
+  const contextWindow = compact ? 2 : 4;
+  const contextStart = hasArabicContext ? Math.max(matchedTokenIndex - contextWindow, 0) : 0;
+  const contextEnd = hasArabicContext
+    ? Math.min(matchedTokenIndex + contextWindow + 1, verseArabicTokens.length)
+    : 0;
+  const contextTokens = hasArabicContext ? verseArabicTokens.slice(contextStart, contextEnd) : [entry.tokenArabic];
 
   return (
     <div className={cn("rounded-md border p-3", compact && "border-dashed p-2")}>
@@ -1020,9 +1046,37 @@ function ResultRow({
           <ArrowRight className="size-4" aria-hidden="true" />
         </Button>
       </div>
-      <p className="mt-1 text-sm text-pretty">{entry.gloss}</p>
+      <div className="mt-2 rounded-md border bg-muted/40 px-2.5 py-2">
+        <p dir="rtl" className="font-arabic text-right text-xl leading-relaxed text-pretty">
+          {hasArabicContext && contextStart > 0 && (
+            <span className="px-1 text-muted-foreground/80">…</span>
+          )}
+          {contextTokens.map((token, index) => {
+            const absoluteIndex = hasArabicContext ? contextStart + index : index;
+            const isMatch = absoluteIndex === matchedTokenIndex;
+
+            return (
+              <span
+                key={`${location}-context-${absoluteIndex}`}
+                className={cn(
+                  "mx-0.5 inline-block rounded px-1 py-0.5",
+                  isMatch ? "bg-primary/20 text-primary" : "text-foreground",
+                )}
+              >
+                {token}
+              </span>
+            );
+          })}
+          {hasArabicContext && contextEnd < verseArabicTokens.length && (
+            <span className="px-1 text-muted-foreground/80">…</span>
+          )}
+        </p>
+      </div>
+      <p className="mt-2 text-sm text-pretty">{highlightQuery(entry.gloss, queryText)}</p>
       {entry.verseTranslation && (
-        <p className="mt-1 text-xs text-muted-foreground text-pretty">{entry.verseTranslation}</p>
+        <p className="mt-1 text-xs text-muted-foreground text-pretty">
+          {highlightQuery(entry.verseTranslation, queryText)}
+        </p>
       )}
       <div className="mt-2 flex flex-wrap gap-2">
         {entry.lemmas.slice(0, 3).map((lemma) => (
@@ -1048,4 +1102,31 @@ function ResultRow({
       )}
     </div>
   );
+}
+
+function highlightQuery(value: string, query: string | undefined): ReactNode {
+  const normalizedQuery = query?.trim();
+  if (!normalizedQuery || normalizedQuery.length < 2) {
+    return value;
+  }
+
+  const escapedQuery = normalizedQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const matcher = new RegExp(`(${escapedQuery})`, "ig");
+  const parts = value.split(matcher);
+
+  if (parts.length <= 1) {
+    return value;
+  }
+
+  return parts.map((part, index) => {
+    if (part.toLowerCase() === normalizedQuery.toLowerCase()) {
+      return (
+        <mark key={`match-${index}`} className="rounded-sm bg-primary/20 px-0.5 text-primary">
+          {part}
+        </mark>
+      );
+    }
+
+    return <span key={`plain-${index}`}>{part}</span>;
+  });
 }
