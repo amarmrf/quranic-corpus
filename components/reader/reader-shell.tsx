@@ -824,7 +824,7 @@ export function ReaderShell({ locationParam }: Props) {
                 onClick={() => setShowTranslations((current) => !current)}
                 disabled={readerView}
               >
-                Verse translations
+                Translations
               </Button>
               <Button
                 variant={showPhonetic ? "default" : "outline"}
