@@ -1060,9 +1060,6 @@ export function ReaderShell({ locationParam }: Props) {
         <Card className="bg-card/90">
           <CardHeader className="pb-4">
             <CardTitle className="text-base text-balance">Reader stream</CardTitle>
-            <CardDescription className="text-pretty">
-              Load additional verses while staying anchored to token-level morphology work.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
