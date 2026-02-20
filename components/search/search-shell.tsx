@@ -502,6 +502,36 @@ export function SearchShell() {
       .trim() || selectedResult?.tokenArabic || "";
   const analyzedGloss = analyzedToken?.translation || selectedResult?.gloss || "No gloss available.";
   const analyzedPhonetic = analyzedToken?.phonetic || selectedResult?.phonetic || "";
+  const activeQueryText = useMemo(() => {
+    if (activeTab === "search") {
+      return searchData?.query.q;
+    }
+    if (activeTab === "dictionary") {
+      return dictionaryOccurrences?.query.q;
+    }
+    return concordanceData?.query.q;
+  }, [activeTab, concordanceData?.query.q, dictionaryOccurrences?.query.q, searchData?.query.q]);
+  const selectedResultTranslationSnippet = useMemo(() => {
+    if (!selectedResult?.verseTranslation) {
+      return null;
+    }
+
+    const verseArabicTokens = selectedResult.verseArabicTokens ?? [];
+    const hasArabicContext = verseArabicTokens.length > 0;
+    const rawMatchedTokenIndex = selectedResult.matchedTokenIndex ?? Math.max(selectedResult.location[2] - 1, 0);
+    const matchedTokenIndex = hasArabicContext
+      ? Math.min(Math.max(rawMatchedTokenIndex, 0), verseArabicTokens.length - 1)
+      : 0;
+
+    return getTranslationSnippet(
+      selectedResult.verseTranslation,
+      activeQueryText,
+      selectedResult.gloss,
+      false,
+      matchedTokenIndex,
+      verseArabicTokens.length,
+    );
+  }, [activeQueryText, selectedResult]);
   const activeResults = useMemo<SearchResult[]>(() => {
     if (activeTab === "search") {
       return searchData?.results ?? [];
@@ -597,7 +627,7 @@ export function SearchShell() {
         <Card className="bg-card/90">
           <CardHeader className="pb-4">
             <CardTitle className="text-base text-balance">Tool controls</CardTitle>
-            <CardDescription className="text-pretty">Each tab has its own workflow.</CardDescription>
+           
           </CardHeader>
           <CardContent className="space-y-3">
             <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ActiveTab)}>
@@ -923,7 +953,7 @@ export function SearchShell() {
                   setChapter("all");
                 }}
               >
-                Reset filters
+                Reset
               </Button>
             </div>
 
@@ -1175,9 +1205,9 @@ export function SearchShell() {
                   {analyzedPhonetic.length > 0 && (
                     <p className="text-xs text-foreground/70 text-pretty">{analyzedPhonetic}</p>
                   )}
-                  {selectedResult.verseTranslation && (
+                  {selectedResultTranslationSnippet && (
                     <p className="text-xs text-foreground/70 text-pretty">
-                      {selectedResult.verseTranslation}
+                      {highlightTranslation(selectedResultTranslationSnippet, activeQueryText, selectedResult.gloss)}
                     </p>
                   )}
                 </div>
@@ -1319,6 +1349,17 @@ function ResultRow({
   const matchedTokenIndex = hasArabicContext
     ? Math.min(Math.max(rawMatchedTokenIndex, 0), verseArabicTokens.length - 1)
     : 0;
+  const tokenGloss = entry.verseTranslation ? entry.gloss : undefined;
+  const translationLine = entry.verseTranslation
+    ? getTranslationSnippet(
+        entry.verseTranslation,
+        queryText,
+        tokenGloss,
+        compact,
+        matchedTokenIndex,
+        verseArabicTokens.length,
+      )
+    : entry.gloss;
   const contextWindow = compact ? 2 : 4;
   const contextStart = hasArabicContext ? Math.max(matchedTokenIndex - contextWindow, 0) : 0;
   const contextEnd = hasArabicContext
@@ -1335,12 +1376,26 @@ function ResultRow({
       )}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge variant="outline" className="tabular-nums">
             {location}
           </Badge>
           <span className="font-arabic text-xl leading-none">{entry.tokenArabic}</span>
           <span className="text-sm text-foreground/80">{entry.phonetic}</span>
+          {entry.lemmas.map((lemma, index) => (
+            <Badge
+              key={`top-lemma-${location}-${lemma.key}-${index}`}
+              variant="outline"
+              className="whitespace-nowrap"
+              style={{
+                borderColor: getLinguisticToneColor("noun", 0.5),
+                backgroundColor: getLinguisticToneColor("noun", 0.14),
+                color: getLinguisticToneColor("noun"),
+              }}
+            >
+              LEM: {lemma.key}
+            </Badge>
+          ))}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -1380,40 +1435,9 @@ function ResultRow({
           )}
         </p>
       </div>
-      <p className="mt-2 text-sm text-pretty">{highlightQuery(entry.gloss, queryText)}</p>
-      {entry.verseTranslation && (
-        <p className="mt-1 text-xs text-foreground/75 text-pretty">
-          {highlightQuery(entry.verseTranslation, queryText)}
-        </p>
-      )}
-      <div className="mt-2 flex flex-wrap gap-2">
-        {entry.lemmas.slice(0, 3).map((lemma) => (
-          <Badge
-            key={`lemma-${lemma.key}`}
-            variant="outline"
-            style={{
-              borderColor: getLinguisticToneColor("noun", 0.5),
-              backgroundColor: getLinguisticToneColor("noun", 0.14),
-              color: getLinguisticToneColor("noun"),
-            }}
-          >
-            LEM: {lemma.key}
-          </Badge>
-        ))}
-        {entry.roots.slice(0, 3).map((root) => (
-          <Badge
-            key={`root-${root.key}`}
-            variant="outline"
-            style={{
-              borderColor: getLinguisticToneColor("verb", 0.5),
-              backgroundColor: getLinguisticToneColor("verb", 0.14),
-              color: getLinguisticToneColor("verb"),
-            }}
-          >
-            ROOT: {root.key}
-          </Badge>
-        ))}
-      </div>
+      <p className="mt-2 text-sm text-foreground/85 text-pretty">
+        {highlightTranslation(translationLine, queryText, tokenGloss)}
+      </p>
       {showMorphology && (
         <div className="mt-2 space-y-1">
           <p className="text-xs text-muted-foreground">POS: {entry.posTags.join(", ") || "-"}</p>
@@ -1428,25 +1452,25 @@ function ResultRow({
   );
 }
 
-function highlightQuery(value: string, query: string | undefined): ReactNode {
-  const normalizedQuery = query?.trim();
-  if (!normalizedQuery || normalizedQuery.length < 2) {
-    return value;
+function highlightWithTerm(value: string, term: string | undefined, keyPrefix: string): ReactNode | null {
+  const normalizedTerm = term?.trim();
+  if (!normalizedTerm || normalizedTerm.length < 2) {
+    return null;
   }
 
-  const escapedQuery = normalizedQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const matcher = new RegExp(`(${escapedQuery})`, "ig");
+  const escapedTerm = normalizedTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const matcher = new RegExp(`(${escapedTerm})`, "ig");
   const parts = value.split(matcher);
 
   if (parts.length <= 1) {
-    return value;
+    return null;
   }
 
   return parts.map((part, index) => {
-    if (part.toLowerCase() === normalizedQuery.toLowerCase()) {
+    if (part.toLowerCase() === normalizedTerm.toLowerCase()) {
       return (
         <mark
-          key={`match-${index}`}
+          key={`${keyPrefix}-match-${index}`}
           className="rounded-sm px-0.5"
           style={{
             backgroundColor: getLinguisticToneColor("verb", 0.2),
@@ -1458,6 +1482,161 @@ function highlightQuery(value: string, query: string | undefined): ReactNode {
       );
     }
 
-    return <span key={`plain-${index}`}>{part}</span>;
+    return <span key={`${keyPrefix}-plain-${index}`}>{part}</span>;
   });
+}
+
+function highlightTranslation(
+  value: string,
+  query: string | undefined,
+  tokenGloss: string | undefined,
+): ReactNode {
+  const glossHighlight = highlightWithTerm(value, tokenGloss, "gloss");
+  if (glossHighlight) {
+    return glossHighlight;
+  }
+
+  const queryHighlight = highlightWithTerm(value, query, "query");
+  return queryHighlight ?? value;
+}
+
+function getTranslationSnippet(
+  value: string,
+  query: string | undefined,
+  tokenGloss: string | undefined,
+  compact: boolean,
+  matchedTokenIndex: number,
+  arabicTokenCount: number,
+): string {
+  const anchorHint =
+    arabicTokenCount > 1 ? Math.min(Math.max(matchedTokenIndex / (arabicTokenCount - 1), 0), 1) : 0.5;
+  const focusTerm = getTranslationFocusTerm(value, query, tokenGloss);
+  const wordWindow = compact ? 10 : 14;
+  const fallbackAnchor = Math.round(anchorHint * Math.max(0, value.length - 1));
+
+  if (!focusTerm) {
+    return clipByWordWindow(value, fallbackAnchor, wordWindow);
+  }
+
+  const matchIndices = getMatchIndicesIgnoreCase(value, focusTerm);
+  if (matchIndices.length === 0) {
+    return clipByWordWindow(value, fallbackAnchor, wordWindow);
+  }
+
+  const matchIndex = getClosestIndexByRatio(value.length, matchIndices, anchorHint);
+  return clipByWordWindow(value, matchIndex, wordWindow);
+}
+
+function getTranslationFocusTerm(
+  value: string,
+  query: string | undefined,
+  tokenGloss: string | undefined,
+): string | undefined {
+  const candidates = [tokenGloss, query];
+  for (const candidate of candidates) {
+    const normalized = candidate?.trim();
+    if (!normalized || normalized.length < 2) {
+      continue;
+    }
+    if (indexOfIgnoreCase(value, normalized) >= 0) {
+      return normalized;
+    }
+  }
+
+  return undefined;
+}
+
+function indexOfIgnoreCase(value: string, needle: string): number {
+  return value.toLowerCase().indexOf(needle.toLowerCase());
+}
+
+function getMatchIndicesIgnoreCase(value: string, needle: string): number[] {
+  const source = value.toLowerCase();
+  const term = needle.toLowerCase();
+  const indices: number[] = [];
+  let searchStart = 0;
+
+  while (searchStart < source.length) {
+    const index = source.indexOf(term, searchStart);
+    if (index < 0) {
+      break;
+    }
+    indices.push(index);
+    searchStart = index + Math.max(1, term.length);
+  }
+
+  return indices;
+}
+
+function getClosestIndexByRatio(
+  textLength: number,
+  indices: number[],
+  targetRatio: number,
+): number {
+  const denominator = Math.max(1, textLength - 1);
+  let bestIndex = indices[0] ?? 0;
+  let bestDelta = Number.POSITIVE_INFINITY;
+
+  for (const index of indices) {
+    const ratio = index / denominator;
+    const delta = Math.abs(ratio - targetRatio);
+    if (delta < bestDelta) {
+      bestDelta = delta;
+      bestIndex = index;
+    }
+  }
+
+  return bestIndex;
+}
+
+function clipByWordWindow(value: string, anchorIndex: number, window: number): string {
+  const matcher = /\S+/g;
+  const ranges: Array<{ word: string; start: number; end: number }> = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = matcher.exec(value)) !== null) {
+    const word = match[0];
+    const start = match.index;
+    ranges.push({
+      word,
+      start,
+      end: start + word.length,
+    });
+  }
+
+  if (ranges.length === 0) {
+    return value;
+  }
+
+  if (ranges.length <= window * 2 + 2) {
+    return value;
+  }
+
+  let anchorWord = ranges.findIndex((range) => anchorIndex >= range.start && anchorIndex < range.end);
+  if (anchorWord < 0) {
+    anchorWord = 0;
+    for (let i = 0; i < ranges.length; i++) {
+      if (ranges[i]!.start >= anchorIndex) {
+        anchorWord = i;
+        break;
+      }
+    }
+  }
+
+  const startWord = Math.max(0, anchorWord - window);
+  const endWord = Math.min(ranges.length, anchorWord + window + 1);
+  let snippet = ranges
+    .slice(startWord, endWord)
+    .map((range) => range.word)
+    .join(" ")
+    .trim();
+
+  if (startWord > 0) {
+    snippet = `… ${snippet}`;
+  }
+  if (endWord < ranges.length) {
+    snippet = `${snippet} …`;
+  }
+
+  return snippet;
 }

@@ -791,9 +791,6 @@ export function ReaderShell({ locationParam }: Props) {
         <Card className="bg-card/90">
           <CardHeader className="pb-4">
             <CardTitle className="text-base text-balance">Session controls</CardTitle>
-            <CardDescription className="text-pretty">
-              Keep chapter navigation, translation selection, and token filters docked while reading.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="space-y-2">

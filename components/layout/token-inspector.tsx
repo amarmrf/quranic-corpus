@@ -32,16 +32,18 @@ export function TokenInspector({
           cardClassName,
         )}
       >
-        <CardHeader className={cn("border-b bg-muted/20", headerActions && "space-y-3")}>
-          <CardTitle className="text-base text-balance">{title}</CardTitle>
+        <CardHeader className={cn("border-b bg-muted/20 px-4 py-3", description && "space-y-1.5")}>
+          <div className={cn("flex items-start justify-between gap-2", !headerActions && "block")}>
+            <CardTitle className="text-base leading-tight text-balance">{title}</CardTitle>
+            {headerActions}
+          </div>
           {description && (
             <CardDescription className="text-foreground/80 text-pretty">{description}</CardDescription>
           )}
-          {headerActions}
         </CardHeader>
         <CardContent
           className={cn(
-            "space-y-3 bg-muted/20 pt-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto",
+            "space-y-3 bg-muted/20 pt-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto",
             contentClassName,
           )}
         >
