@@ -2,15 +2,28 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowRight, BookOpenText, CircleHelp, Loader2, Moon, Search, Sun } from "lucide-react";
+import {
+  BookOpenText,
+  ChevronLeft,
+  ChevronRight,
+  CircleHelp,
+  Loader2,
+  Moon,
+  Search,
+  Sun,
+} from "lucide-react";
 
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { useTheme } from "@/hooks/use-theme";
-import { getConcordance, getDictionary, getDictionaryIndex, getMetadata, getSearch } from "@/lib/api";
 import {
-  getLinguisticToneColor,
-  type LinguisticTone,
-} from "@/lib/linguistic-colors";
+  getConcordance,
+  getDictionary,
+  getDictionaryIndex,
+  getMetadata,
+  getSearch,
+  getWordMorphology,
+} from "@/lib/api";
+import { getLinguisticToneColor } from "@/lib/linguistic-colors";
 import type {
   ConcordanceResponse,
   DictionaryIndexEntry,
@@ -18,9 +31,11 @@ import type {
   DictionaryResponse,
   SearchGroupBy,
   SearchMode,
+  SearchResult,
   SearchResponse,
   SearchSort,
   Translation,
+  WordMorphology,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { WorkbenchShell } from "@/components/layout/workbench-shell";
@@ -89,14 +104,15 @@ const LINGUISTIC_TERMS: { term: string; description: string }[] = [
   },
 ];
 
-function getActiveTabTone(tab: ActiveTab): LinguisticTone {
-  if (tab === "search") {
-    return "verb";
-  }
-  if (tab === "dictionary") {
-    return "noun";
-  }
-  return "other";
+function isSameLocation(
+  left: [number, number, number],
+  right: [number, number, number],
+) {
+  return left[0] === right[0] && left[1] === right[1] && left[2] === right[2];
+}
+
+function toSearchResultId(location: [number, number, number]) {
+  return `search-result-${location.join("-")}`;
 }
 
 export function SearchShell() {
@@ -143,6 +159,10 @@ export function SearchShell() {
   const [metadataError, setMetadataError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [selectedResult, setSelectedResult] = useState<SearchResult | null>(null);
+  const [wordMorphology, setWordMorphology] = useState<WordMorphology | null>(null);
+  const [wordLoading, setWordLoading] = useState(false);
+  const [wordError, setWordError] = useState<string | null>(null);
 
   useEffect(() => {
     const run = async () => {
@@ -261,7 +281,6 @@ export function SearchShell() {
   const dictionaryStartsWithLabel =
     dictionaryStartsWith === "all" ? "All letters" : `Letter ${dictionaryStartsWith}`;
   const hasSharedFilters = exact || diacritics || chapter !== "all";
-  const activeToolTone = getActiveTabTone(activeTab);
   const normalizeDictionaryValue = useCallback(
     (value: string) => {
       const trimmed = value.trim();
@@ -431,8 +450,105 @@ export function SearchShell() {
     void runConcordance(DEFAULT_CONCORDANCE_EXAMPLE);
   }, [activeTab, runConcordance]);
 
+  useEffect(() => {
+    if (!selectedResult) {
+      setWordMorphology(null);
+      setWordError(null);
+      return;
+    }
+
+    let active = true;
+    setWordMorphology(null);
+
+    const run = async () => {
+      setWordLoading(true);
+      setWordError(null);
+      try {
+        const morphology = await getWordMorphology(selectedResult.location);
+        if (active) {
+          setWordMorphology(morphology);
+        }
+      } catch (requestError) {
+        if (!active) {
+          return;
+        }
+
+        const message =
+          requestError instanceof Error ? requestError.message : "Unable to load token analysis.";
+        setWordError(message);
+      } finally {
+        if (active) {
+          setWordLoading(false);
+        }
+      }
+    };
+
+    void run();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedResult]);
+
   const canLoadMoreSearch =
     searchData != null && searchData.results.length > 0 && searchData.results.length < searchData.total;
+  const selectedLocation = selectedResult?.location.join(":");
+  const analyzedToken = wordMorphology?.token;
+  const analyzedArabic =
+    analyzedToken?.segments
+      .map((segment) => segment.arabic ?? "")
+      .join("")
+      .trim() || selectedResult?.tokenArabic || "";
+  const analyzedGloss = analyzedToken?.translation || selectedResult?.gloss || "No gloss available.";
+  const analyzedPhonetic = analyzedToken?.phonetic || selectedResult?.phonetic || "";
+  const activeResults = useMemo<SearchResult[]>(() => {
+    if (activeTab === "search") {
+      return searchData?.results ?? [];
+    }
+
+    if (activeTab === "dictionary") {
+      return dictionaryOccurrences?.results ?? [];
+    }
+
+    if (!concordanceData) {
+      return [];
+    }
+
+    if (concordanceGroupBy === "none") {
+      return concordanceData.results;
+    }
+
+    return concordanceData.groups.flatMap((group) => group.occurrences);
+  }, [activeTab, concordanceData, concordanceGroupBy, dictionaryOccurrences, searchData]);
+  const selectedResultIndex = useMemo(() => {
+    if (!selectedResult) {
+      return -1;
+    }
+
+    return activeResults.findIndex((entry) => isSameLocation(entry.location, selectedResult.location));
+  }, [activeResults, selectedResult]);
+  const canSelectPreviousResult = selectedResultIndex > 0;
+  const canSelectNextResult = selectedResultIndex >= 0 && selectedResultIndex < activeResults.length - 1;
+  const selectPreviousResult = useCallback(() => {
+    if (!canSelectPreviousResult) {
+      return;
+    }
+
+    const previous = activeResults[selectedResultIndex - 1];
+    if (previous) {
+      setSelectedResult(previous);
+    }
+  }, [activeResults, canSelectPreviousResult, selectedResultIndex]);
+  const selectNextResult = useCallback(() => {
+    if (!canSelectNextResult) {
+      return;
+    }
+
+    const next = activeResults[selectedResultIndex + 1];
+    if (next) {
+      setSelectedResult(next);
+    }
+  }, [activeResults, canSelectNextResult, selectedResultIndex]);
 
   return (
     <WorkbenchShell
@@ -443,12 +559,13 @@ export function SearchShell() {
       rightLabel="Context"
       actions={(
         <>
-          <Badge variant="secondary" className="tabular-nums">
+          <Badge variant="secondary" className="hidden tabular-nums sm:inline-flex">
             API proxy: /api/quranic
           </Badge>
           <Button variant="outline" onClick={() => router.push("/reader/1:1")}>
             <BookOpenText className="size-4" aria-hidden="true" />
-            Reader
+            <span className="sm:hidden">Read</span>
+            <span className="hidden sm:inline">Reader</span>
           </Button>
           <Button
             type="button"
@@ -859,7 +976,8 @@ export function SearchShell() {
                 <ResultRow
                   key={entry.location.join(":")}
                   entry={entry}
-                  onOpenReader={router.push}
+                  onShowDetails={setSelectedResult}
+                  isSelected={selectedLocation === entry.location.join(":")}
                   queryText={searchData?.query.q}
                 />
               ))}
@@ -890,7 +1008,8 @@ export function SearchShell() {
                   <ResultRow
                     key={entry.location.join(":")}
                     entry={entry}
-                    onOpenReader={router.push}
+                    onShowDetails={setSelectedResult}
+                    isSelected={selectedLocation === entry.location.join(":")}
                     showMorphology
                     queryText={dictionaryOccurrences?.query.q}
                   />
@@ -918,7 +1037,8 @@ export function SearchShell() {
                       <ResultRow
                         key={entry.location.join(":")}
                         entry={entry}
-                        onOpenReader={router.push}
+                        onShowDetails={setSelectedResult}
+                        isSelected={selectedLocation === entry.location.join(":")}
                         queryText={concordanceData?.query.q}
                       />
                     ))
@@ -935,7 +1055,8 @@ export function SearchShell() {
                             <ResultRow
                               key={entry.location.join(":")}
                               entry={entry}
-                              onOpenReader={router.push}
+                              onShowDetails={setSelectedResult}
+                              isSelected={selectedLocation === entry.location.join(":")}
                               compact
                               queryText={concordanceData?.query.q}
                             />
@@ -970,42 +1091,198 @@ export function SearchShell() {
       )}
       right={(
         <>
-          <Card className="border bg-card">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base text-balance">Session status</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-2 text-sm">
-              <div className="flex items-center justify-between gap-2 rounded-md border p-2">
-                <span className="text-muted-foreground">Active tool</span>
-                <Badge
-                  variant="outline"
-                  style={{
-                    borderColor: getLinguisticToneColor(activeToolTone, 0.5),
-                    backgroundColor: getLinguisticToneColor(activeToolTone, 0.14),
-                    color: getLinguisticToneColor(activeToolTone),
-                  }}
-                >
-                  {activeTab}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between gap-2 rounded-md border p-2 tabular-nums">
-                <span className="text-muted-foreground">Search rows</span>
-                <span style={{ color: getLinguisticToneColor("verb") }}>{searchData?.results.length ?? 0}</span>
-              </div>
-              <div className="flex items-center justify-between gap-2 rounded-md border p-2 tabular-nums">
-                <span className="text-muted-foreground">Dictionary rows</span>
-                <span style={{ color: getLinguisticToneColor("noun") }}>
-                  {dictionaryOccurrences?.results.length ?? 0}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-2 rounded-md border p-2 tabular-nums">
-                <span className="text-muted-foreground">Concordance rows</span>
-                <span style={{ color: getLinguisticToneColor("other") }}>
-                  {concordanceData?.results.length ?? 0}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="lg:sticky lg:top-0">
+            <Card className="border bg-card lg:max-h-[calc(100dvh-11rem)] lg:overflow-hidden">
+              <CardHeader className="space-y-3">
+                <CardTitle className="text-base text-balance">Token analysis</CardTitle>
+                <CardDescription className="text-pretty">
+                  Use <span className="font-medium text-foreground">Details</span> on a result row to inspect it here.
+                </CardDescription>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label="Select previous result token"
+                      onClick={selectPreviousResult}
+                      disabled={!canSelectPreviousResult}
+                    >
+                      <ChevronLeft className="size-4" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      aria-label="Select next result token"
+                      onClick={selectNextResult}
+                      disabled={!canSelectNextResult}
+                    >
+                      <ChevronRight className="size-4" aria-hidden="true" />
+                    </Button>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (selectedResult) {
+                        router.push(`/reader/${selectedResult.location.join(":")}`);
+                      }
+                    }}
+                    disabled={!selectedResult}
+                  >
+                    Open in reader
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3 lg:max-h-[calc(100dvh-17rem)] lg:overflow-y-auto">
+                {!selectedResult && (
+                  <div className="rounded-md border border-dashed p-3">
+                    <p className="text-sm text-muted-foreground text-pretty">
+                      No token selected. Pick any row and open details to load token analysis.
+                    </p>
+                  </div>
+                )}
+
+                {selectedResult && (
+                  <div className="space-y-3">
+                    <div className="space-y-2 rounded-md border p-3">
+                      <div className="space-y-1">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Location</p>
+                          <p className="text-sm font-semibold tabular-nums">
+                            {selectedResult.location.join(":")}
+                          </p>
+                        </div>
+                      </div>
+                      {analyzedArabic.length > 0 && (
+                        <p className="font-arabic text-2xl leading-none">{analyzedArabic}</p>
+                      )}
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground text-pretty">{analyzedGloss}</p>
+                        {analyzedPhonetic.length > 0 && (
+                          <p className="text-xs text-muted-foreground text-pretty">{analyzedPhonetic}</p>
+                        )}
+                        {selectedResult.verseTranslation && (
+                          <p className="text-xs text-muted-foreground text-pretty">
+                            {selectedResult.verseTranslation}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {wordError && (
+                      <div className="space-y-2 rounded-md border border-destructive/40 p-3">
+                        <p className="text-sm text-destructive text-pretty">{wordError}</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSelectedResult((current) => (current ? { ...current } : current))}
+                        >
+                          Retry analysis
+                        </Button>
+                      </div>
+                    )}
+
+                    {wordLoading && (
+                      <div className="flex items-center gap-2 rounded-md border p-3 text-sm text-muted-foreground">
+                        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                        Loading token analysis...
+                      </div>
+                    )}
+
+                    {!wordLoading && wordMorphology && (
+                      <div className="overflow-hidden rounded-md border">
+                        <section className="space-y-1.5 p-3">
+                          <p className="text-xs text-muted-foreground">Summary</p>
+                          <p className="text-sm text-pretty">{wordMorphology.summary}</p>
+                        </section>
+                        <Separator />
+                        <section className="space-y-1.5 p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-xs text-muted-foreground">Segments</p>
+                            <Badge variant="outline" className="tabular-nums">
+                              {wordMorphology.segmentDescriptions.length}
+                            </Badge>
+                          </div>
+                          {wordMorphology.segmentDescriptions.length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-pretty">
+                              Segment-level notes are not yet available for this token.
+                            </p>
+                          ) : (
+                            <ul className="space-y-1.5">
+                              {wordMorphology.segmentDescriptions.map((description) => (
+                                <li key={description} className="text-sm text-pretty">
+                                  {description}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </section>
+                        <Separator />
+                        <section className="space-y-1.5 p-3">
+                          <p className="text-xs text-muted-foreground">Arabic grammar</p>
+                          <p className="text-sm text-pretty">{wordMorphology.arabicGrammar}</p>
+                        </section>
+                      </div>
+                    )}
+
+                    <div className="grid gap-2 rounded-md border p-3 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-muted-foreground">Match field</span>
+                        <Badge variant="outline">{selectedResult.matchField}</Badge>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-muted-foreground">POS tags</span>
+                        <span className="text-right">{selectedResult.posTags.join(", ") || "-"}</span>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-muted-foreground">Morphology</p>
+                        <p className="text-xs text-pretty">
+                          {selectedResult.morphology.length > 0
+                            ? selectedResult.morphology.slice(0, 6).join(" | ")
+                            : "No morphology tags."}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 rounded-md border p-3">
+                      <p className="text-xs text-muted-foreground">Lexeme links</p>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedResult.lemmas.slice(0, 3).map((lemma) => (
+                          <Badge
+                            key={`analysis-lemma-${lemma.key}`}
+                            variant="outline"
+                            style={{
+                              borderColor: getLinguisticToneColor("noun", 0.5),
+                              backgroundColor: getLinguisticToneColor("noun", 0.14),
+                              color: getLinguisticToneColor("noun"),
+                            }}
+                          >
+                            LEM: {lemma.key}
+                          </Badge>
+                        ))}
+                        {selectedResult.roots.slice(0, 3).map((root) => (
+                          <Badge
+                            key={`analysis-root-${root.key}`}
+                            variant="outline"
+                            style={{
+                              borderColor: getLinguisticToneColor("verb", 0.5),
+                              backgroundColor: getLinguisticToneColor("verb", 0.14),
+                              color: getLinguisticToneColor("verb"),
+                            }}
+                          >
+                            ROOT: {root.key}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
 
           <Card className="border bg-card">
             <CardHeader>
@@ -1033,19 +1310,20 @@ export function SearchShell() {
 
 function ResultRow({
   entry,
-  onOpenReader,
+  onShowDetails,
+  isSelected,
   compact = false,
   showMorphology = false,
   queryText,
 }: {
   entry: SearchResponse["results"][number];
-  onOpenReader: (href: string) => void;
+  onShowDetails: (entry: SearchResult) => void;
+  isSelected: boolean;
   compact?: boolean;
   showMorphology?: boolean;
   queryText?: string;
 }) {
   const location = entry.location.join(":");
-  const readerHref = `/reader/${entry.verseLocation[0]}:${entry.verseLocation[1]}`;
   const verseArabicTokens = entry.verseArabicTokens ?? [];
   const hasArabicContext = verseArabicTokens.length > 0;
   const rawMatchedTokenIndex = entry.matchedTokenIndex ?? Math.max(entry.location[2] - 1, 0);
@@ -1060,7 +1338,10 @@ function ResultRow({
   const contextTokens = hasArabicContext ? verseArabicTokens.slice(contextStart, contextEnd) : [entry.tokenArabic];
 
   return (
-    <div className={cn("rounded-md border p-3", compact && "border-dashed p-2")}>
+    <div
+      id={toSearchResultId(entry.location)}
+      className={cn("rounded-md border p-3", compact && "border-dashed p-2")}
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="tabular-nums">
@@ -1069,10 +1350,15 @@ function ResultRow({
           <span className="font-arabic text-xl leading-none">{entry.tokenArabic}</span>
           <span className="text-sm text-muted-foreground">{entry.phonetic}</span>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => onOpenReader(readerHref)}>
-          Open in reader
-          <ArrowRight className="size-4" aria-hidden="true" />
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={isSelected ? "default" : "outline"}
+            size="sm"
+            onClick={() => onShowDetails(entry)}
+          >
+            Details
+          </Button>
+        </div>
       </div>
       <div className="mt-2 rounded-md border bg-muted/40 px-2.5 py-2">
         <p dir="rtl" className="font-arabic text-right text-xl leading-relaxed text-pretty">

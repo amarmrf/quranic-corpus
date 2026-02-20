@@ -25,7 +25,13 @@ import {
   getLinguisticColor,
   getLinguisticToneColor,
 } from "@/lib/linguistic-colors";
-import { normalizeVerseLocation, parseLocation, toTokenId, toVerseId } from "@/lib/location";
+import {
+  isTokenLocation,
+  normalizeVerseLocation,
+  parseLocation,
+  toTokenId,
+  toVerseId,
+} from "@/lib/location";
 import type { Chapter, Token, Verse, WordMorphology } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { WorkbenchShell } from "@/components/layout/workbench-shell";
@@ -157,10 +163,24 @@ export function ReaderShell({ locationParam }: Props) {
   const readerSessionIdRef = useRef(0);
   const versesRef = useRef<Verse[]>([]);
 
+  const parsedLocation = useMemo(() => parseLocation(locationParam), [locationParam]);
+
   const [chapterNumber, verseNumber] = useMemo(
-    () => normalizeVerseLocation(parseLocation(locationParam)),
-    [locationParam],
+    () => normalizeVerseLocation(parsedLocation),
+    [parsedLocation],
   );
+  const initialTokenSelection = useMemo<[number, number, number] | null>(() => {
+    if (!isTokenLocation(parsedLocation)) {
+      return null;
+    }
+
+    const [tokenChapter, tokenVerse, tokenNumber] = parsedLocation;
+    if (tokenChapter !== chapterNumber || tokenVerse !== verseNumber || tokenNumber < 1) {
+      return null;
+    }
+
+    return [tokenChapter, tokenVerse, tokenNumber];
+  }, [chapterNumber, parsedLocation, verseNumber]);
 
   const activeChapter = useMemo(
     () => metadata?.chapters.find((chapter) => chapter.chapterNumber === chapterNumber),
@@ -305,6 +325,9 @@ export function ReaderShell({ locationParam }: Props) {
       setVerses(initialVerses);
       setHasPrevious(firstVerse > 1);
       setHasNext(lastVerse < activeChapter.verseCount);
+      if (initialTokenSelection) {
+        setSelectedToken(initialTokenSelection);
+      }
     } catch (error) {
       if (sessionId !== readerSessionIdRef.current) {
         return;
@@ -323,6 +346,7 @@ export function ReaderShell({ locationParam }: Props) {
   }, [
     activeChapter,
     chapterNumber,
+    initialTokenSelection,
     metadata,
     selectedTranslations,
     verseNumber,
@@ -659,6 +683,28 @@ export function ReaderShell({ locationParam }: Props) {
 
     return null;
   }, [selectedToken, verses]);
+  const loadedTokenLocations = useMemo<[number, number, number][]>(
+    () =>
+      verses.flatMap((verse) =>
+        verse.tokens.map((token) => token.location as [number, number, number]),
+      ),
+    [verses],
+  );
+  const selectedTokenIndex = useMemo(() => {
+    if (!selectedToken) {
+      return -1;
+    }
+
+    return loadedTokenLocations.findIndex(
+      (tokenLocation) =>
+        tokenLocation[0] === selectedToken[0] &&
+        tokenLocation[1] === selectedToken[1] &&
+        tokenLocation[2] === selectedToken[2],
+    );
+  }, [loadedTokenLocations, selectedToken]);
+  const canSelectPreviousToken = selectedTokenIndex > 0;
+  const canSelectNextToken =
+    selectedTokenIndex >= 0 && selectedTokenIndex < loadedTokenLocations.length - 1;
 
   const selectedTokenArabic = useMemo(() => {
     if (selectedTokenData) {
@@ -684,6 +730,26 @@ export function ReaderShell({ locationParam }: Props) {
     const tokenElement = document.getElementById(toTokenId(selectedToken));
     tokenElement?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [selectedToken]);
+  const selectPreviousToken = useCallback(() => {
+    if (!canSelectPreviousToken) {
+      return;
+    }
+
+    const previousToken = loadedTokenLocations[selectedTokenIndex - 1];
+    if (previousToken) {
+      setSelectedToken(previousToken);
+    }
+  }, [canSelectPreviousToken, loadedTokenLocations, selectedTokenIndex]);
+  const selectNextToken = useCallback(() => {
+    if (!canSelectNextToken) {
+      return;
+    }
+
+    const nextToken = loadedTokenLocations[selectedTokenIndex + 1];
+    if (nextToken) {
+      setSelectedToken(nextToken);
+    }
+  }, [canSelectNextToken, loadedTokenLocations, selectedTokenIndex]);
 
   const headerApi = "/api/quranic";
 
@@ -697,12 +763,13 @@ export function ReaderShell({ locationParam }: Props) {
       rightContentClassName="lg:overflow-visible"
       actions={(
         <>
-          <Badge variant="secondary" className="tabular-nums">
+          <Badge variant="secondary" className="hidden tabular-nums sm:inline-flex">
             API proxy: {headerApi}
           </Badge>
           <Button type="button" variant="outline" onClick={() => router.push("/search")}>
             <Search className="size-4" aria-hidden="true" />
-            Search tools
+            <span className="sm:hidden">Search</span>
+            <span className="hidden sm:inline">Search tools</span>
           </Button>
           <Button
             type="button"
@@ -1179,8 +1246,41 @@ export function ReaderShell({ locationParam }: Props) {
       right={(
         <div className="lg:sticky lg:top-0">
           <Card className="bg-card/90 lg:max-h-[calc(100dvh-7.5rem)] lg:overflow-hidden">
-            <CardHeader>
+            <CardHeader className="space-y-3">
               <CardTitle className="text-base text-balance">Token details</CardTitle>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="Select previous token"
+                    onClick={selectPreviousToken}
+                    disabled={!canSelectPreviousToken}
+                  >
+                    <ChevronLeft className="size-4" aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="Select next token"
+                    onClick={selectNextToken}
+                    disabled={!canSelectNextToken}
+                  >
+                    <ChevronRight className="size-4" aria-hidden="true" />
+                  </Button>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={jumpToSelectedToken}
+                  disabled={!selectedToken}
+                >
+                  Show token
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="space-y-3 lg:max-h-[calc(100dvh-12rem)] lg:overflow-y-auto">
               {!selectedToken && (
@@ -1214,16 +1314,11 @@ export function ReaderShell({ locationParam }: Props) {
                         <p className="text-xs text-muted-foreground">Selected location</p>
                         <p className="text-sm font-semibold tabular-nums">{selectedToken.join(":")}</p>
                       </div>
-                      <div className="flex flex-col items-end gap-2">
-                        {selectedTokenData && (
-                          <Badge variant="outline" className="tabular-nums">
-                            {selectedTokenData.segments.length} segments
-                          </Badge>
-                        )}
-                        <Button variant="outline" size="sm" onClick={jumpToSelectedToken}>
-                          Show token
-                        </Button>
-                      </div>
+                      {selectedTokenData && (
+                        <Badge variant="outline" className="tabular-nums">
+                          {selectedTokenData.segments.length} segments
+                        </Badge>
+                      )}
                     </div>
                     {selectedTokenArabic.length > 0 && (
                       <p className="font-arabic text-2xl leading-none">{selectedTokenArabic}</p>

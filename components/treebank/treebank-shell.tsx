@@ -103,7 +103,7 @@ export function TreebankShell({ locationParam, initialGraphNumber }: Props) {
       rightLabel="Metadata"
       actions={(
         <>
-          <Badge variant="secondary" className="tabular-nums">
+          <Badge variant="secondary" className="hidden tabular-nums sm:inline-flex">
             API: /syntax
           </Badge>
           <Button
@@ -112,7 +112,8 @@ export function TreebankShell({ locationParam, initialGraphNumber }: Props) {
             onClick={() => router.push(`/reader/${chapterNumber}:${verseNumber}`)}
           >
             <ArrowLeft className="size-4" aria-hidden="true" />
-            Reader
+            <span className="sm:hidden">Read</span>
+            <span className="hidden sm:inline">Reader</span>
           </Button>
           <Button
             type="button"
