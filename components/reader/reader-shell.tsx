@@ -1284,8 +1284,8 @@ export function ReaderShell({ locationParam }: Props) {
           )}
         >
           {!selectedToken && (
-            <div className="space-y-3 rounded-md border border-dashed p-4">
-              <p className="text-sm text-muted-foreground text-pretty">
+            <div className="space-y-3 rounded-md border border-dashed bg-card p-4">
+              <p className="text-sm text-foreground/80 text-pretty">
                 No token selected. Select a highlighted token in the reader to start analysis.
               </p>
               <Button
@@ -1308,10 +1308,10 @@ export function ReaderShell({ locationParam }: Props) {
 
           {selectedToken && (
             <div className="space-y-3">
-              <div className="space-y-2 rounded-md border p-3">
+              <div className="space-y-2 rounded-md border border-border/90 bg-card p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="text-xs text-muted-foreground">Selected location</p>
+                    <p className="text-xs text-foreground/70">Selected location</p>
                     <p className="text-sm font-semibold tabular-nums">{selectedToken.join(":")}</p>
                   </div>
                   {selectedTokenData && (
@@ -1324,9 +1324,9 @@ export function ReaderShell({ locationParam }: Props) {
                   <p className="font-arabic text-2xl leading-none">{selectedTokenArabic}</p>
                 )}
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground text-pretty">{selectedTokenGloss}</p>
+                  <p className="text-sm text-foreground/85 text-pretty">{selectedTokenGloss}</p>
                   {selectedTokenPhonetic.length > 0 && (
-                    <p className="text-xs text-muted-foreground text-pretty">{selectedTokenPhonetic}</p>
+                    <p className="text-xs text-foreground/70 text-pretty">{selectedTokenPhonetic}</p>
                   )}
                 </div>
               </div>
@@ -1351,21 +1351,21 @@ export function ReaderShell({ locationParam }: Props) {
               {wordLoading && <WordSkeleton />}
 
               {!wordLoading && wordMorphology && (
-                <div className="overflow-hidden rounded-md border">
+                <div className="overflow-hidden rounded-md border border-border/90 bg-card">
                   <section className="space-y-1.5 p-3">
-                    <p className="text-xs text-muted-foreground">Summary</p>
+                    <p className="text-xs text-foreground/70">Summary</p>
                     <p className="text-sm text-pretty">{wordMorphology.summary}</p>
                   </section>
                   <Separator />
                   <section className="space-y-1.5 p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs text-muted-foreground">Segments</p>
+                      <p className="text-xs text-foreground/70">Segments</p>
                       <Badge variant="outline" className="tabular-nums">
                         {wordMorphology.segmentDescriptions.length}
                       </Badge>
                     </div>
                     {wordMorphology.segmentDescriptions.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-pretty">
+                      <p className="text-sm text-foreground/75 text-pretty">
                         Segment-level notes are not yet available for this token.
                       </p>
                     ) : (
@@ -1380,7 +1380,7 @@ export function ReaderShell({ locationParam }: Props) {
                   </section>
                   <Separator />
                   <section className="space-y-1.5 p-3">
-                    <p className="text-xs text-muted-foreground">Arabic grammar</p>
+                    <p className="text-xs text-foreground/70">Arabic grammar</p>
                     <p className="text-sm text-pretty">{wordMorphology.arabicGrammar}</p>
                   </section>
                 </div>

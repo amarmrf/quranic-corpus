@@ -28,17 +28,22 @@ export function TokenInspector({
     <div className={cn("lg:sticky lg:top-0", containerClassName)}>
       <Card
         className={cn(
-          "bg-card/90 lg:flex lg:max-h-[calc(100dvh-7.5rem)] lg:flex-col lg:overflow-hidden",
+          "border-border/90 bg-card lg:flex lg:max-h-[calc(100dvh-7.5rem)] lg:flex-col lg:overflow-hidden",
           cardClassName,
         )}
       >
-        <CardHeader className={cn(headerActions && "space-y-3")}>
+        <CardHeader className={cn("border-b bg-muted/20", headerActions && "space-y-3")}>
           <CardTitle className="text-base text-balance">{title}</CardTitle>
-          {description && <CardDescription className="text-pretty">{description}</CardDescription>}
+          {description && (
+            <CardDescription className="text-foreground/80 text-pretty">{description}</CardDescription>
+          )}
           {headerActions}
         </CardHeader>
         <CardContent
-          className={cn("space-y-3 lg:min-h-0 lg:flex-1 lg:overflow-y-auto", contentClassName)}
+          className={cn(
+            "space-y-3 bg-muted/20 pt-4 lg:min-h-0 lg:flex-1 lg:overflow-y-auto",
+            contentClassName,
+          )}
         >
           {children}
         </CardContent>

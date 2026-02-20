@@ -1108,11 +1108,6 @@ export function SearchShell() {
       right={(
         <TokenInspector
           title="Token analysis"
-          description={(
-            <>
-              Use <span className="font-medium text-foreground">Details</span> on a result row to inspect it here.
-            </>
-          )}
           headerActions={(
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -1154,8 +1149,8 @@ export function SearchShell() {
           )}
         >
           {!selectedResult && (
-            <div className="rounded-md border border-dashed p-3">
-              <p className="text-sm text-muted-foreground text-pretty">
+            <div className="rounded-md border border-dashed bg-card p-3">
+              <p className="text-sm text-foreground/80 text-pretty">
                 No token selected. Pick any row and open details to load token analysis.
               </p>
             </div>
@@ -1163,10 +1158,10 @@ export function SearchShell() {
 
           {selectedResult && (
             <div className="space-y-3">
-              <div className="space-y-2 rounded-md border p-3">
+              <div className="space-y-2 rounded-md border border-border/90 bg-card p-3">
                 <div className="space-y-1">
                   <div>
-                    <p className="text-xs text-muted-foreground">Location</p>
+                    <p className="text-xs text-foreground/70">Location</p>
                     <p className="text-sm font-semibold tabular-nums">
                       {selectedResult.location.join(":")}
                     </p>
@@ -1176,12 +1171,12 @@ export function SearchShell() {
                   <p className="font-arabic text-2xl leading-none">{analyzedArabic}</p>
                 )}
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground text-pretty">{analyzedGloss}</p>
+                  <p className="text-sm text-foreground/85 text-pretty">{analyzedGloss}</p>
                   {analyzedPhonetic.length > 0 && (
-                    <p className="text-xs text-muted-foreground text-pretty">{analyzedPhonetic}</p>
+                    <p className="text-xs text-foreground/70 text-pretty">{analyzedPhonetic}</p>
                   )}
                   {selectedResult.verseTranslation && (
-                    <p className="text-xs text-muted-foreground text-pretty">
+                    <p className="text-xs text-foreground/70 text-pretty">
                       {selectedResult.verseTranslation}
                     </p>
                   )}
@@ -1202,28 +1197,28 @@ export function SearchShell() {
               )}
 
               {wordLoading && (
-                <div className="flex items-center gap-2 rounded-md border p-3 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 rounded-md border border-border/90 bg-card p-3 text-sm text-foreground/75">
                   <Loader2 className="size-4 animate-spin" aria-hidden="true" />
                   Loading token analysis...
                 </div>
               )}
 
               {!wordLoading && wordMorphology && (
-                <div className="overflow-hidden rounded-md border">
+                <div className="overflow-hidden rounded-md border border-border/90 bg-card">
                   <section className="space-y-1.5 p-3">
-                    <p className="text-xs text-muted-foreground">Summary</p>
+                    <p className="text-xs text-foreground/70">Summary</p>
                     <p className="text-sm text-pretty">{wordMorphology.summary}</p>
                   </section>
                   <Separator />
                   <section className="space-y-1.5 p-3">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs text-muted-foreground">Segments</p>
+                      <p className="text-xs text-foreground/70">Segments</p>
                       <Badge variant="outline" className="tabular-nums">
                         {wordMorphology.segmentDescriptions.length}
                       </Badge>
                     </div>
                     {wordMorphology.segmentDescriptions.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-pretty">
+                      <p className="text-sm text-foreground/75 text-pretty">
                         Segment-level notes are not yet available for this token.
                       </p>
                     ) : (
@@ -1238,23 +1233,23 @@ export function SearchShell() {
                   </section>
                   <Separator />
                   <section className="space-y-1.5 p-3">
-                    <p className="text-xs text-muted-foreground">Arabic grammar</p>
+                    <p className="text-xs text-foreground/70">Arabic grammar</p>
                     <p className="text-sm text-pretty">{wordMorphology.arabicGrammar}</p>
                   </section>
                 </div>
               )}
 
-              <div className="grid gap-2 rounded-md border p-3 text-sm">
+              <div className="grid gap-2 rounded-md border border-border/90 bg-card p-3 text-sm">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">Match field</span>
+                  <span className="text-foreground/70">Match field</span>
                   <Badge variant="outline">{selectedResult.matchField}</Badge>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-muted-foreground">POS tags</span>
+                  <span className="text-foreground/70">POS tags</span>
                   <span className="text-right">{selectedResult.posTags.join(", ") || "-"}</span>
                 </div>
                 <div className="space-y-1">
-                  <p className="text-muted-foreground">Morphology</p>
+                  <p className="text-foreground/70">Morphology</p>
                   <p className="text-xs text-pretty">
                     {selectedResult.morphology.length > 0
                       ? selectedResult.morphology.slice(0, 6).join(" | ")
@@ -1263,8 +1258,8 @@ export function SearchShell() {
                 </div>
               </div>
 
-              <div className="space-y-2 rounded-md border p-3">
-                <p className="text-xs text-muted-foreground">Lexeme links</p>
+              <div className="space-y-2 rounded-md border border-border/90 bg-card p-3">
+                <p className="text-xs text-foreground/70">Lexeme links</p>
                 <div className="flex flex-wrap gap-2">
                   {selectedResult.lemmas.slice(0, 3).map((lemma) => (
                     <Badge
