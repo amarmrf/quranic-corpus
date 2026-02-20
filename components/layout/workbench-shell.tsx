@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -20,35 +20,6 @@ type WorkbenchShellProps = {
   className?: string;
 };
 
-type WorkbenchPaneProps = {
-  children: ReactNode;
-  label?: string;
-  className?: string;
-  contentClassName?: string;
-};
-
-type PaneKey = "left" | "main" | "right";
-
-function WorkbenchPane({
-  children,
-  label,
-  className,
-  contentClassName,
-}: WorkbenchPaneProps) {
-  return (
-    <section className={cn("rounded-lg border bg-card/70 shadow-sm lg:min-h-0", className)}>
-      {label && (
-        <div className="border-b px-3 py-2">
-          <p className="text-xs font-medium uppercase text-muted-foreground">{label}</p>
-        </div>
-      )}
-      <div className={cn("space-y-3 p-3 lg:h-full lg:overflow-y-auto", contentClassName)}>
-        {children}
-      </div>
-    </section>
-  );
-}
-
 export function WorkbenchShell({
   title,
   description,
@@ -56,28 +27,14 @@ export function WorkbenchShell({
   left,
   main,
   right,
-  leftLabel = "Controls",
-  mainLabel = "Workspace",
-  rightLabel = "Context",
+  leftLabel: _leftLabel = "Controls",
+  mainLabel: _mainLabel = "Workspace",
+  rightLabel: _rightLabel = "Context",
   leftContentClassName,
   mainContentClassName,
   rightContentClassName,
   className,
 }: WorkbenchShellProps) {
-  const paneTabs = useMemo(
-    () =>
-      [
-        { key: "left" as const, label: leftLabel },
-        { key: "main" as const, label: mainLabel },
-        ...(right ? [{ key: "right" as const, label: rightLabel }] : []),
-      ],
-    [leftLabel, mainLabel, right, rightLabel],
-  );
-
-  const [mobilePane, setMobilePane] = useState<PaneKey>("main");
-  const activeMobilePane =
-    paneTabs.some((pane) => pane.key === mobilePane) ? mobilePane : "main";
-
   return (
     <div className={cn("min-h-dvh bg-background", className)}>
       <div className="mx-auto flex min-h-dvh max-w-[1920px] flex-col px-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-[calc(0.75rem+env(safe-area-inset-top))] lg:px-4">
@@ -93,33 +50,6 @@ export function WorkbenchShell({
           </div>
         </header>
 
-        {paneTabs.length > 1 ? (
-          <nav
-            className="mb-3 flex gap-1 overflow-x-auto rounded-lg border bg-card/70 p-1 lg:hidden"
-            aria-label="Switch workspace pane"
-          >
-            {paneTabs.map((pane) => {
-              const active = pane.key === activeMobilePane;
-              return (
-                <button
-                  key={pane.key}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setMobilePane(pane.key)}
-                  className={cn(
-                    "min-h-9 flex-1 whitespace-nowrap rounded-md px-2.5 py-1.5 text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    active
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                  )}
-                >
-                  {pane.label}
-                </button>
-              );
-            })}
-          </nav>
-        ) : null}
-
         <div
           className={cn(
             "grid gap-3 lg:min-h-0 lg:flex-1",
@@ -128,28 +58,16 @@ export function WorkbenchShell({
               : "lg:grid-cols-[minmax(17rem,22rem)_minmax(0,1fr)]",
           )}
         >
-          <WorkbenchPane
-            label={leftLabel}
-            contentClassName={leftContentClassName}
-            className={cn(activeMobilePane === "left" ? "block" : "hidden lg:block")}
-          >
+          <div className={cn("space-y-3 lg:min-h-0", leftContentClassName)}>
             {left}
-          </WorkbenchPane>
-          <WorkbenchPane
-            label={mainLabel}
-            contentClassName={mainContentClassName}
-            className={cn(activeMobilePane === "main" ? "block" : "hidden lg:block")}
-          >
+          </div>
+          <div className={cn("space-y-3 lg:min-h-0", mainContentClassName)}>
             {main}
-          </WorkbenchPane>
+          </div>
           {right ? (
-            <WorkbenchPane
-              label={rightLabel}
-              contentClassName={rightContentClassName}
-              className={cn(activeMobilePane === "right" ? "block" : "hidden lg:block")}
-            >
+            <div className={cn("space-y-3 lg:min-h-0", rightContentClassName)}>
               {right}
-            </WorkbenchPane>
+            </div>
           ) : null}
         </div>
       </div>

@@ -1142,7 +1142,7 @@ export function ReaderShell({ locationParam }: Props) {
                             </div>
                           </CardHeader>
                           <CardContent className="space-y-3">
-                            <div dir="rtl" className="flex flex-wrap justify-end gap-2">
+                            <div dir="rtl" className="flex flex-wrap justify-start gap-2">
                               {verse.tokens.map((token) => {
                                 const arabicToken = getArabicToken(token);
                                 const tokenLocation = token.location as [number, number, number];

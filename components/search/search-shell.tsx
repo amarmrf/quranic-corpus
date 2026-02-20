@@ -557,6 +557,7 @@ export function SearchShell() {
       leftLabel="Query Console"
       mainLabel="Results Stream"
       rightLabel="Context"
+      rightContentClassName="lg:overflow-visible"
       actions={(
         <>
           <Badge variant="secondary" className="hidden tabular-nums sm:inline-flex">
@@ -939,6 +940,20 @@ export function SearchShell() {
               </div>
             )}
 
+            {showGuide && (
+              <div className="space-y-2 rounded-md border border-dashed p-3">
+                <p className="text-xs text-muted-foreground">Linguistic guide</p>
+                <dl className="space-y-2">
+                  {LINGUISTIC_TERMS.map((entry) => (
+                    <div key={entry.term} className="rounded-md border bg-background p-2">
+                      <dt className="text-sm font-medium text-foreground">{entry.term}</dt>
+                      <dd className="text-xs text-muted-foreground text-pretty">{entry.description}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
+
             {metadataError && <p className="text-sm text-destructive text-pretty">{metadataError}</p>}
             {error && <p className="text-sm text-destructive text-pretty">{error}</p>}
           </CardContent>
@@ -990,7 +1005,7 @@ export function SearchShell() {
                   </p>
                 )}
                 {(dictionaryData?.entries ?? []).map((entry) => (
-                  <Card key={`${entry.type}:${entry.key}`} className="border-dashed bg-background/80">
+                  <Card key={`${entry.type}:${entry.key}`} className="bg-background">
                     <CardContent className="space-y-2 p-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant="secondary">{entry.type}</Badge>
@@ -1043,7 +1058,7 @@ export function SearchShell() {
                       />
                     ))
                   : (concordanceData?.groups ?? []).map((group) => (
-                      <Card key={`${group.type}:${group.key}`} className="border-dashed bg-background/80">
+                      <Card key={`${group.type}:${group.key}`} className="bg-background">
                         <CardContent className="space-y-2 p-3">
                           <div className="flex flex-wrap items-center gap-2">
                             <Badge variant="secondary">{group.type}</Badge>
@@ -1090,9 +1105,8 @@ export function SearchShell() {
         </Card>
       )}
       right={(
-        <>
-          <div className="lg:sticky lg:top-0">
-            <Card className="border bg-card lg:max-h-[calc(100dvh-11rem)] lg:overflow-hidden">
+        <div className="lg:sticky lg:top-0">
+          <Card className="border bg-card">
               <CardHeader className="space-y-3">
                 <CardTitle className="text-base text-balance">Token analysis</CardTitle>
                 <CardDescription className="text-pretty">
@@ -1136,7 +1150,7 @@ export function SearchShell() {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-3 lg:max-h-[calc(100dvh-17rem)] lg:overflow-y-auto">
+              <CardContent className="space-y-3">
                 {!selectedResult && (
                   <div className="rounded-md border border-dashed p-3">
                     <p className="text-sm text-muted-foreground text-pretty">
@@ -1280,29 +1294,10 @@ export function SearchShell() {
                     </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          </div>
 
-          <Card className="border bg-card">
-            <CardHeader>
-              <CardTitle className="text-base text-balance">Linguistic terms</CardTitle>
-              <CardDescription className="text-pretty">
-                Quick definitions for the labels shown in Search, Dictionary, and Concordance results.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <dl className="space-y-2">
-                {LINGUISTIC_TERMS.map((entry) => (
-                  <div key={entry.term} className="rounded-md border bg-background/80 p-2">
-                    <dt className="text-sm font-medium text-foreground">{entry.term}</dt>
-                    <dd className="text-xs text-muted-foreground text-pretty">{entry.description}</dd>
-                  </div>
-                ))}
-              </dl>
-            </CardContent>
+              </CardContent>
           </Card>
-        </>
+        </div>
       )}
     />
   );
@@ -1340,7 +1335,10 @@ function ResultRow({
   return (
     <div
       id={toSearchResultId(entry.location)}
-      className={cn("rounded-md border p-3", compact && "border-dashed p-2")}
+      className={cn(
+        "rounded-md border border-border/90 bg-background p-3",
+        compact && "border-dashed p-2",
+      )}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
@@ -1348,7 +1346,7 @@ function ResultRow({
             {location}
           </Badge>
           <span className="font-arabic text-xl leading-none">{entry.tokenArabic}</span>
-          <span className="text-sm text-muted-foreground">{entry.phonetic}</span>
+          <span className="text-sm text-foreground/80">{entry.phonetic}</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button
@@ -1360,7 +1358,7 @@ function ResultRow({
           </Button>
         </div>
       </div>
-      <div className="mt-2 rounded-md border bg-muted/40 px-2.5 py-2">
+      <div className="mt-2 rounded-md border border-border/80 bg-card px-2.5 py-2">
         <p dir="rtl" className="font-arabic text-right text-xl leading-relaxed text-pretty">
           {hasArabicContext && contextStart > 0 && (
             <span className="px-1 text-muted-foreground/80">…</span>
@@ -1374,7 +1372,9 @@ function ResultRow({
                 key={`${location}-context-${absoluteIndex}`}
                 className={cn(
                   "mx-0.5 inline-block rounded px-1 py-0.5",
-                  isMatch ? "bg-sky-500/20 text-sky-700 dark:text-sky-300" : "text-foreground",
+                  isMatch
+                    ? "bg-sky-500/20 text-sky-700 dark:bg-sky-400/25 dark:text-sky-200"
+                    : "text-foreground",
                 )}
               >
                 {token}
@@ -1388,7 +1388,7 @@ function ResultRow({
       </div>
       <p className="mt-2 text-sm text-pretty">{highlightQuery(entry.gloss, queryText)}</p>
       {entry.verseTranslation && (
-        <p className="mt-1 text-xs text-muted-foreground text-pretty">
+        <p className="mt-1 text-xs text-foreground/75 text-pretty">
           {highlightQuery(entry.verseTranslation, queryText)}
         </p>
       )}
