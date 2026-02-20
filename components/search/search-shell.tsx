@@ -500,7 +500,6 @@ export function SearchShell() {
       .map((segment) => segment.arabic ?? "")
       .join("")
       .trim() || selectedResult?.tokenArabic || "";
-  const analyzedGloss = analyzedToken?.translation || selectedResult?.gloss || "No gloss available.";
   const analyzedPhonetic = analyzedToken?.phonetic || selectedResult?.phonetic || "";
   const activeQueryText = useMemo(() => {
     if (activeTab === "search") {
@@ -1201,7 +1200,6 @@ export function SearchShell() {
                   <p className="font-arabic text-2xl leading-none">{analyzedArabic}</p>
                 )}
                 <div className="space-y-1">
-                  <p className="text-sm text-foreground/85 text-pretty">{analyzedGloss}</p>
                   {analyzedPhonetic.length > 0 && (
                     <p className="text-xs text-foreground/70 text-pretty">{analyzedPhonetic}</p>
                   )}
