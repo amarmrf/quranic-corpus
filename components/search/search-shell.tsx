@@ -38,6 +38,7 @@ import type {
   WordMorphology,
 } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { TokenInspector } from "@/components/layout/token-inspector";
 import { WorkbenchShell } from "@/components/layout/workbench-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1105,199 +1106,197 @@ export function SearchShell() {
         </Card>
       )}
       right={(
-        <div className="lg:sticky lg:top-0">
-          <Card className="border bg-card">
-              <CardHeader className="space-y-3">
-                <CardTitle className="text-base text-balance">Token analysis</CardTitle>
-                <CardDescription className="text-pretty">
-                  Use <span className="font-medium text-foreground">Details</span> on a result row to inspect it here.
-                </CardDescription>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      aria-label="Select previous result token"
-                      onClick={selectPreviousResult}
-                      disabled={!canSelectPreviousResult}
-                    >
-                      <ChevronLeft className="size-4" aria-hidden="true" />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      aria-label="Select next result token"
-                      onClick={selectNextResult}
-                      disabled={!canSelectNextResult}
-                    >
-                      <ChevronRight className="size-4" aria-hidden="true" />
-                    </Button>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      if (selectedResult) {
-                        router.push(`/reader/${selectedResult.location.join(":")}`);
-                      }
-                    }}
-                    disabled={!selectedResult}
-                  >
-                    Open in reader
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {!selectedResult && (
-                  <div className="rounded-md border border-dashed p-3">
-                    <p className="text-sm text-muted-foreground text-pretty">
-                      No token selected. Pick any row and open details to load token analysis.
+        <TokenInspector
+          title="Token analysis"
+          description={(
+            <>
+              Use <span className="font-medium text-foreground">Details</span> on a result row to inspect it here.
+            </>
+          )}
+          headerActions={(
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Select previous result token"
+                  onClick={selectPreviousResult}
+                  disabled={!canSelectPreviousResult}
+                >
+                  <ChevronLeft className="size-4" aria-hidden="true" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Select next result token"
+                  onClick={selectNextResult}
+                  disabled={!canSelectNextResult}
+                >
+                  <ChevronRight className="size-4" aria-hidden="true" />
+                </Button>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (selectedResult) {
+                    router.push(`/reader/${selectedResult.location.join(":")}`);
+                  }
+                }}
+                disabled={!selectedResult}
+              >
+                Open in reader
+              </Button>
+            </div>
+          )}
+        >
+          {!selectedResult && (
+            <div className="rounded-md border border-dashed p-3">
+              <p className="text-sm text-muted-foreground text-pretty">
+                No token selected. Pick any row and open details to load token analysis.
+              </p>
+            </div>
+          )}
+
+          {selectedResult && (
+            <div className="space-y-3">
+              <div className="space-y-2 rounded-md border p-3">
+                <div className="space-y-1">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Location</p>
+                    <p className="text-sm font-semibold tabular-nums">
+                      {selectedResult.location.join(":")}
                     </p>
                   </div>
+                </div>
+                {analyzedArabic.length > 0 && (
+                  <p className="font-arabic text-2xl leading-none">{analyzedArabic}</p>
                 )}
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground text-pretty">{analyzedGloss}</p>
+                  {analyzedPhonetic.length > 0 && (
+                    <p className="text-xs text-muted-foreground text-pretty">{analyzedPhonetic}</p>
+                  )}
+                  {selectedResult.verseTranslation && (
+                    <p className="text-xs text-muted-foreground text-pretty">
+                      {selectedResult.verseTranslation}
+                    </p>
+                  )}
+                </div>
+              </div>
 
-                {selectedResult && (
-                  <div className="space-y-3">
-                    <div className="space-y-2 rounded-md border p-3">
-                      <div className="space-y-1">
-                        <div>
-                          <p className="text-xs text-muted-foreground">Location</p>
-                          <p className="text-sm font-semibold tabular-nums">
-                            {selectedResult.location.join(":")}
-                          </p>
-                        </div>
-                      </div>
-                      {analyzedArabic.length > 0 && (
-                        <p className="font-arabic text-2xl leading-none">{analyzedArabic}</p>
-                      )}
-                      <div className="space-y-1">
-                        <p className="text-sm text-muted-foreground text-pretty">{analyzedGloss}</p>
-                        {analyzedPhonetic.length > 0 && (
-                          <p className="text-xs text-muted-foreground text-pretty">{analyzedPhonetic}</p>
-                        )}
-                        {selectedResult.verseTranslation && (
-                          <p className="text-xs text-muted-foreground text-pretty">
-                            {selectedResult.verseTranslation}
-                          </p>
-                        )}
-                      </div>
+              {wordError && (
+                <div className="space-y-2 rounded-md border border-destructive/40 p-3">
+                  <p className="text-sm text-destructive text-pretty">{wordError}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedResult((current) => (current ? { ...current } : current))}
+                  >
+                    Retry analysis
+                  </Button>
+                </div>
+              )}
+
+              {wordLoading && (
+                <div className="flex items-center gap-2 rounded-md border p-3 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                  Loading token analysis...
+                </div>
+              )}
+
+              {!wordLoading && wordMorphology && (
+                <div className="overflow-hidden rounded-md border">
+                  <section className="space-y-1.5 p-3">
+                    <p className="text-xs text-muted-foreground">Summary</p>
+                    <p className="text-sm text-pretty">{wordMorphology.summary}</p>
+                  </section>
+                  <Separator />
+                  <section className="space-y-1.5 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-muted-foreground">Segments</p>
+                      <Badge variant="outline" className="tabular-nums">
+                        {wordMorphology.segmentDescriptions.length}
+                      </Badge>
                     </div>
-
-                    {wordError && (
-                      <div className="space-y-2 rounded-md border border-destructive/40 p-3">
-                        <p className="text-sm text-destructive text-pretty">{wordError}</p>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setSelectedResult((current) => (current ? { ...current } : current))}
-                        >
-                          Retry analysis
-                        </Button>
-                      </div>
-                    )}
-
-                    {wordLoading && (
-                      <div className="flex items-center gap-2 rounded-md border p-3 text-sm text-muted-foreground">
-                        <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-                        Loading token analysis...
-                      </div>
-                    )}
-
-                    {!wordLoading && wordMorphology && (
-                      <div className="overflow-hidden rounded-md border">
-                        <section className="space-y-1.5 p-3">
-                          <p className="text-xs text-muted-foreground">Summary</p>
-                          <p className="text-sm text-pretty">{wordMorphology.summary}</p>
-                        </section>
-                        <Separator />
-                        <section className="space-y-1.5 p-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs text-muted-foreground">Segments</p>
-                            <Badge variant="outline" className="tabular-nums">
-                              {wordMorphology.segmentDescriptions.length}
-                            </Badge>
-                          </div>
-                          {wordMorphology.segmentDescriptions.length === 0 ? (
-                            <p className="text-sm text-muted-foreground text-pretty">
-                              Segment-level notes are not yet available for this token.
-                            </p>
-                          ) : (
-                            <ul className="space-y-1.5">
-                              {wordMorphology.segmentDescriptions.map((description) => (
-                                <li key={description} className="text-sm text-pretty">
-                                  {description}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </section>
-                        <Separator />
-                        <section className="space-y-1.5 p-3">
-                          <p className="text-xs text-muted-foreground">Arabic grammar</p>
-                          <p className="text-sm text-pretty">{wordMorphology.arabicGrammar}</p>
-                        </section>
-                      </div>
-                    )}
-
-                    <div className="grid gap-2 rounded-md border p-3 text-sm">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-muted-foreground">Match field</span>
-                        <Badge variant="outline">{selectedResult.matchField}</Badge>
-                      </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-muted-foreground">POS tags</span>
-                        <span className="text-right">{selectedResult.posTags.join(", ") || "-"}</span>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-muted-foreground">Morphology</p>
-                        <p className="text-xs text-pretty">
-                          {selectedResult.morphology.length > 0
-                            ? selectedResult.morphology.slice(0, 6).join(" | ")
-                            : "No morphology tags."}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2 rounded-md border p-3">
-                      <p className="text-xs text-muted-foreground">Lexeme links</p>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedResult.lemmas.slice(0, 3).map((lemma) => (
-                          <Badge
-                            key={`analysis-lemma-${lemma.key}`}
-                            variant="outline"
-                            style={{
-                              borderColor: getLinguisticToneColor("noun", 0.5),
-                              backgroundColor: getLinguisticToneColor("noun", 0.14),
-                              color: getLinguisticToneColor("noun"),
-                            }}
-                          >
-                            LEM: {lemma.key}
-                          </Badge>
+                    {wordMorphology.segmentDescriptions.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-pretty">
+                        Segment-level notes are not yet available for this token.
+                      </p>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {wordMorphology.segmentDescriptions.map((description) => (
+                          <li key={description} className="text-sm text-pretty">
+                            {description}
+                          </li>
                         ))}
-                        {selectedResult.roots.slice(0, 3).map((root) => (
-                          <Badge
-                            key={`analysis-root-${root.key}`}
-                            variant="outline"
-                            style={{
-                              borderColor: getLinguisticToneColor("verb", 0.5),
-                              backgroundColor: getLinguisticToneColor("verb", 0.14),
-                              color: getLinguisticToneColor("verb"),
-                            }}
-                          >
-                            ROOT: {root.key}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
+                      </ul>
+                    )}
+                  </section>
+                  <Separator />
+                  <section className="space-y-1.5 p-3">
+                    <p className="text-xs text-muted-foreground">Arabic grammar</p>
+                    <p className="text-sm text-pretty">{wordMorphology.arabicGrammar}</p>
+                  </section>
+                </div>
+              )}
 
-              </CardContent>
-          </Card>
-        </div>
+              <div className="grid gap-2 rounded-md border p-3 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Match field</span>
+                  <Badge variant="outline">{selectedResult.matchField}</Badge>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">POS tags</span>
+                  <span className="text-right">{selectedResult.posTags.join(", ") || "-"}</span>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-muted-foreground">Morphology</p>
+                  <p className="text-xs text-pretty">
+                    {selectedResult.morphology.length > 0
+                      ? selectedResult.morphology.slice(0, 6).join(" | ")
+                      : "No morphology tags."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2 rounded-md border p-3">
+                <p className="text-xs text-muted-foreground">Lexeme links</p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedResult.lemmas.slice(0, 3).map((lemma) => (
+                    <Badge
+                      key={`analysis-lemma-${lemma.key}`}
+                      variant="outline"
+                      style={{
+                        borderColor: getLinguisticToneColor("noun", 0.5),
+                        backgroundColor: getLinguisticToneColor("noun", 0.14),
+                        color: getLinguisticToneColor("noun"),
+                      }}
+                    >
+                      LEM: {lemma.key}
+                    </Badge>
+                  ))}
+                  {selectedResult.roots.slice(0, 3).map((root) => (
+                    <Badge
+                      key={`analysis-root-${root.key}`}
+                      variant="outline"
+                      style={{
+                        borderColor: getLinguisticToneColor("verb", 0.5),
+                        backgroundColor: getLinguisticToneColor("verb", 0.14),
+                        color: getLinguisticToneColor("verb"),
+                      }}
+                    >
+                      ROOT: {root.key}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </TokenInspector>
       )}
     />
   );

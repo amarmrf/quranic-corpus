@@ -34,6 +34,7 @@ import {
 } from "@/lib/location";
 import type { Chapter, Token, Verse, WordMorphology } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { TokenInspector } from "@/components/layout/token-inspector";
 import { WorkbenchShell } from "@/components/layout/workbench-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1244,152 +1245,149 @@ export function ReaderShell({ locationParam }: Props) {
         </Card>
       )}
       right={(
-        <div className="lg:sticky lg:top-0">
-          <Card className="bg-card/90 lg:max-h-[calc(100dvh-7.5rem)] lg:overflow-hidden">
-            <CardHeader className="space-y-3">
-              <CardTitle className="text-base text-balance">Token details</CardTitle>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    aria-label="Select previous token"
-                    onClick={selectPreviousToken}
-                    disabled={!canSelectPreviousToken}
-                  >
-                    <ChevronLeft className="size-4" aria-hidden="true" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    aria-label="Select next token"
-                    onClick={selectNextToken}
-                    disabled={!canSelectNextToken}
-                  >
-                    <ChevronRight className="size-4" aria-hidden="true" />
-                  </Button>
-                </div>
+        <TokenInspector
+          title="Token details"
+          headerActions={(
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
                 <Button
                   type="button"
                   variant="outline"
-                  size="sm"
-                  onClick={jumpToSelectedToken}
-                  disabled={!selectedToken}
+                  size="icon"
+                  aria-label="Select previous token"
+                  onClick={selectPreviousToken}
+                  disabled={!canSelectPreviousToken}
                 >
-                  Show token
+                  <ChevronLeft className="size-4" aria-hidden="true" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Select next token"
+                  onClick={selectNextToken}
+                  disabled={!canSelectNextToken}
+                >
+                  <ChevronRight className="size-4" aria-hidden="true" />
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-3 lg:max-h-[calc(100dvh-12rem)] lg:overflow-y-auto">
-              {!selectedToken && (
-                <div className="space-y-3 rounded-md border border-dashed p-4">
-                  <p className="text-sm text-muted-foreground text-pretty">
-                    No token selected. Select a highlighted token in the reader to start analysis.
-                  </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={jumpToSelectedToken}
+                disabled={!selectedToken}
+              >
+                Show token
+              </Button>
+            </div>
+          )}
+        >
+          {!selectedToken && (
+            <div className="space-y-3 rounded-md border border-dashed p-4">
+              <p className="text-sm text-muted-foreground text-pretty">
+                No token selected. Select a highlighted token in the reader to start analysis.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const candidate = verses[0]?.tokens[0]?.location as
+                    | [number, number, number]
+                    | undefined;
+                  if (candidate) {
+                    setSelectedToken(candidate);
+                  }
+                }}
+                disabled={verses.length === 0}
+              >
+                Select first loaded token
+              </Button>
+            </div>
+          )}
+
+          {selectedToken && (
+            <div className="space-y-3">
+              <div className="space-y-2 rounded-md border p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Selected location</p>
+                    <p className="text-sm font-semibold tabular-nums">{selectedToken.join(":")}</p>
+                  </div>
+                  {selectedTokenData && (
+                    <Badge variant="outline" className="tabular-nums">
+                      {selectedTokenData.segments.length} segments
+                    </Badge>
+                  )}
+                </div>
+                {selectedTokenArabic.length > 0 && (
+                  <p className="font-arabic text-2xl leading-none">{selectedTokenArabic}</p>
+                )}
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground text-pretty">{selectedTokenGloss}</p>
+                  {selectedTokenPhonetic.length > 0 && (
+                    <p className="text-xs text-muted-foreground text-pretty">{selectedTokenPhonetic}</p>
+                  )}
+                </div>
+              </div>
+
+              {wordError && (
+                <div className="space-y-2 rounded-md border border-destructive/40 p-3">
+                  <p className="text-sm text-destructive text-pretty">{wordError}</p>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => {
-                      const candidate = verses[0]?.tokens[0]?.location as
-                        | [number, number, number]
-                        | undefined;
-                      if (candidate) {
-                        setSelectedToken(candidate);
+                      if (selectedToken) {
+                        setSelectedToken([...selectedToken] as [number, number, number]);
                       }
                     }}
-                    disabled={verses.length === 0}
                   >
-                    Select first loaded token
+                    Retry analysis
                   </Button>
                 </div>
               )}
 
-              {selectedToken && (
-                <div className="space-y-3">
-                  <div className="space-y-2 rounded-md border p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-xs text-muted-foreground">Selected location</p>
-                        <p className="text-sm font-semibold tabular-nums">{selectedToken.join(":")}</p>
-                      </div>
-                      {selectedTokenData && (
-                        <Badge variant="outline" className="tabular-nums">
-                          {selectedTokenData.segments.length} segments
-                        </Badge>
-                      )}
+              {wordLoading && <WordSkeleton />}
+
+              {!wordLoading && wordMorphology && (
+                <div className="overflow-hidden rounded-md border">
+                  <section className="space-y-1.5 p-3">
+                    <p className="text-xs text-muted-foreground">Summary</p>
+                    <p className="text-sm text-pretty">{wordMorphology.summary}</p>
+                  </section>
+                  <Separator />
+                  <section className="space-y-1.5 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs text-muted-foreground">Segments</p>
+                      <Badge variant="outline" className="tabular-nums">
+                        {wordMorphology.segmentDescriptions.length}
+                      </Badge>
                     </div>
-                    {selectedTokenArabic.length > 0 && (
-                      <p className="font-arabic text-2xl leading-none">{selectedTokenArabic}</p>
+                    {wordMorphology.segmentDescriptions.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-pretty">
+                        Segment-level notes are not yet available for this token.
+                      </p>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {wordMorphology.segmentDescriptions.map((description) => (
+                          <li key={description} className="text-sm text-pretty">
+                            {description}
+                          </li>
+                        ))}
+                      </ul>
                     )}
-                    <div className="space-y-1">
-                      <p className="text-sm text-muted-foreground text-pretty">{selectedTokenGloss}</p>
-                      {selectedTokenPhonetic.length > 0 && (
-                        <p className="text-xs text-muted-foreground text-pretty">{selectedTokenPhonetic}</p>
-                      )}
-                    </div>
-                  </div>
-
-                  {wordError && (
-                    <div className="space-y-2 rounded-md border border-destructive/40 p-3">
-                      <p className="text-sm text-destructive text-pretty">{wordError}</p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          if (selectedToken) {
-                            setSelectedToken([...selectedToken] as [number, number, number]);
-                          }
-                        }}
-                      >
-                        Retry analysis
-                      </Button>
-                    </div>
-                  )}
-
-                  {wordLoading && <WordSkeleton />}
-
-                  {!wordLoading && wordMorphology && (
-                    <div className="overflow-hidden rounded-md border">
-                      <section className="space-y-1.5 p-3">
-                        <p className="text-xs text-muted-foreground">Summary</p>
-                        <p className="text-sm text-pretty">{wordMorphology.summary}</p>
-                      </section>
-                      <Separator />
-                      <section className="space-y-1.5 p-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-xs text-muted-foreground">Segments</p>
-                          <Badge variant="outline" className="tabular-nums">
-                            {wordMorphology.segmentDescriptions.length}
-                          </Badge>
-                        </div>
-                        {wordMorphology.segmentDescriptions.length === 0 ? (
-                          <p className="text-sm text-muted-foreground text-pretty">
-                            Segment-level notes are not yet available for this token.
-                          </p>
-                        ) : (
-                          <ul className="space-y-1.5">
-                            {wordMorphology.segmentDescriptions.map((description) => (
-                              <li key={description} className="text-sm text-pretty">
-                                {description}
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </section>
-                      <Separator />
-                      <section className="space-y-1.5 p-3">
-                        <p className="text-xs text-muted-foreground">Arabic grammar</p>
-                        <p className="text-sm text-pretty">{wordMorphology.arabicGrammar}</p>
-                      </section>
-                    </div>
-                  )}
+                  </section>
+                  <Separator />
+                  <section className="space-y-1.5 p-3">
+                    <p className="text-xs text-muted-foreground">Arabic grammar</p>
+                    <p className="text-sm text-pretty">{wordMorphology.arabicGrammar}</p>
+                  </section>
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          )}
+        </TokenInspector>
       )}
     />
   );
