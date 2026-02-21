@@ -963,7 +963,7 @@ export function SearchShell() {
                       placeholder="Optional token query (or use filters only)..."
                     />
                   </div>
-                  {advancedResultType === "matches" ? (
+                  {advancedResultType === "matches" && (
                     <Select value={searchSort} onValueChange={(value) => setSearchSort(value as SearchSort)}>
                       <SelectTrigger>
                         <SelectValue />
@@ -976,11 +976,6 @@ export function SearchShell() {
                         ))}
                       </SelectContent>
                     </Select>
-                  ) : (
-                    <p className="rounded-md border border-dashed p-2 text-xs text-muted-foreground text-pretty">
-                      Concordance grouping is fixed to <span className="font-medium text-foreground">None</span> for
-                      morpheme mode.
-                    </p>
                   )}
                   <div className="space-y-2 rounded-md border border-dashed p-2">
                     <div className="grid gap-2 sm:grid-cols-2">
@@ -1002,7 +997,7 @@ export function SearchShell() {
                       <Input
                         value={morphemePos}
                         onChange={(event) => setMorphemePos(event.target.value)}
-                        placeholder="POS filter (e.g., V, N, PRON)"
+                        placeholder="POS filter (V, N, PRON)"
                       />
                     </div>
                     <div className="grid gap-2 sm:grid-cols-2">
@@ -1014,14 +1009,14 @@ export function SearchShell() {
                       <Input
                         value={morphemeRoot}
                         onChange={(event) => setMorphemeRoot(event.target.value)}
-                        placeholder="Root filter (e.g., كتب or ktb)"
+                        placeholder="Root filter (كتب or ktb)"
                       />
                     </div>
                     <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
                       <Input
                         value={morphemeFeature}
                         onChange={(event) => setMorphemeFeature(event.target.value)}
-                        placeholder="Feature filter (e.g., IMPF, MOOD:JUS, POS:V)"
+                        placeholder="Feature filter (IMPF, MOOD:JUS, POS:V)"
                       />
                       <Button
                         type="button"
@@ -1030,7 +1025,7 @@ export function SearchShell() {
                         disabled={!hasMorphemeFilters}
                         onClick={resetMorphemeFilters}
                       >
-                        Reset morpheme filters
+                        Reset
                       </Button>
                     </div>
                   </div>
