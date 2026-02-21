@@ -55,14 +55,14 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-type ActiveTab = "explore" | "dictionary";
+type ActiveTab = "explore" | "advanced" | "dictionary";
 type ExploreResultType = "matches" | "concordance";
+type ExploreSearchMode = Exclude<SearchMode, "morpheme">;
 
-const MODE_OPTIONS: { value: SearchMode; label: string }[] = [
+const MODE_OPTIONS: { value: ExploreSearchMode; label: string }[] = [
   { value: "surface", label: "Surface/gloss" },
   { value: "lemma", label: "Lemma" },
   { value: "root", label: "Root" },
-  { value: "morpheme", label: "Morpheme" },
   { value: "translation", label: "Verse translation" },
 ];
 
@@ -157,8 +157,11 @@ export function SearchShell() {
   const defaultDictionaryLoadedRef = useRef(false);
   const [showGuide, setShowGuide] = useLocalStorage<boolean>("qc.search.show-guide", true);
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>("explore");
+  const [activeTab, setActiveTab] = useState<ActiveTab>(() => (
+    urlSearchParams.get("mode") === "morpheme" ? "advanced" : "explore"
+  ));
   const [exploreResultType, setExploreResultType] = useState<ExploreResultType>("matches");
+  const [advancedResultType, setAdvancedResultType] = useState<ExploreResultType>("matches");
   const [translation, setTranslation] = useState<string>(
     urlSearchParams.get("translation") ?? "sahih-international",
   );
@@ -168,9 +171,13 @@ export function SearchShell() {
   const [limit, setLimit] = useState(50);
 
   const [searchQuery, setSearchQuery] = useState(urlSearchParams.get("q") ?? "");
-  const [searchMode, setSearchMode] = useState<SearchMode>(
-    (urlSearchParams.get("mode") as SearchMode) ?? "surface",
-  );
+  const [searchMode, setSearchMode] = useState<ExploreSearchMode>(() => {
+    const mode = urlSearchParams.get("mode");
+    if (mode === "surface" || mode === "lemma" || mode === "root" || mode === "translation") {
+      return mode;
+    }
+    return "surface";
+  });
   const [searchSort, setSearchSort] = useState<SearchSort>("relevance");
   const [searchOffset, setSearchOffset] = useState(0);
   const [searchData, setSearchData] = useState<SearchResponse | null>(null);
@@ -352,7 +359,7 @@ export function SearchShell() {
   );
 
   useEffect(() => {
-    if (activeTab !== "explore") {
+    if (activeTab !== "explore" && activeTab !== "advanced") {
       return;
     }
 
@@ -364,19 +371,20 @@ export function SearchShell() {
     defaultSearchLoadedRef.current = true;
 
     const initialModeParam = urlSearchParams.get("mode");
-    const initialMode: SearchMode =
+    const initialExploreMode: ExploreSearchMode =
       initialModeParam === "surface" ||
       initialModeParam === "lemma" ||
       initialModeParam === "root" ||
-      initialModeParam === "morpheme" ||
       initialModeParam === "translation"
         ? initialModeParam
         : "surface";
 
     const queryToRun = initialQuery.length > 0 ? initialQuery : DEFAULT_SEARCH_EXAMPLE;
-    const modeToRun = initialQuery.length > 0 ? initialMode : "surface";
+    const modeToRun: SearchMode = activeTab === "advanced"
+      ? "morpheme"
+      : (initialQuery.length > 0 ? initialExploreMode : "surface");
 
-    setSearchMode(modeToRun);
+    setSearchMode(initialExploreMode);
     setSearchSort("relevance");
     setSearchQuery(queryToRun);
     void runSearch(0, queryToRun, modeToRun);
@@ -551,13 +559,19 @@ export function SearchShell() {
   ]);
 
   useEffect(() => {
-    if (searchMode === "morpheme" && concordanceGroupBy !== "none") {
+    if (activeTab === "advanced" && concordanceGroupBy !== "none") {
       setConcordanceGroupBy("none");
     }
-  }, [concordanceGroupBy, searchMode]);
+  }, [activeTab, concordanceGroupBy]);
 
   useEffect(() => {
-    if (activeTab !== "explore" || exploreResultType !== "concordance" || loading || concordanceData != null) {
+    const activeResultType = activeTab === "advanced" ? advancedResultType : exploreResultType;
+    if (
+      (activeTab !== "explore" && activeTab !== "advanced") ||
+      activeResultType !== "concordance" ||
+      loading ||
+      concordanceData != null
+    ) {
       return;
     }
 
@@ -566,8 +580,18 @@ export function SearchShell() {
       setSearchQuery(queryToRun);
     }
 
-    void runConcordance(0, queryToRun, searchMode);
-  }, [activeTab, concordanceData, exploreResultType, loading, runConcordance, searchMode, searchQuery]);
+    const modeToRun: SearchMode = activeTab === "advanced" ? "morpheme" : searchMode;
+    void runConcordance(0, queryToRun, modeToRun);
+  }, [
+    activeTab,
+    advancedResultType,
+    concordanceData,
+    exploreResultType,
+    loading,
+    runConcordance,
+    searchMode,
+    searchQuery,
+  ]);
 
   useEffect(() => {
     if (activeTab !== "dictionary" || defaultDictionaryLoadedRef.current) {
@@ -647,9 +671,13 @@ export function SearchShell() {
     if (activeTab === "dictionary") {
       return dictionaryOccurrences?.query.q;
     }
+    if (activeTab === "advanced") {
+      return advancedResultType === "matches" ? searchData?.query.q : concordanceData?.query.q;
+    }
     return exploreResultType === "matches" ? searchData?.query.q : concordanceData?.query.q;
   }, [
     activeTab,
+    advancedResultType,
     concordanceData?.query.q,
     dictionaryOccurrences?.query.q,
     exploreResultType,
@@ -681,7 +709,8 @@ export function SearchShell() {
       return dictionaryOccurrences?.results ?? [];
     }
 
-    if (exploreResultType === "matches") {
+    const activeResultType = activeTab === "advanced" ? advancedResultType : exploreResultType;
+    if (activeResultType === "matches") {
       return searchData?.results ?? [];
     }
 
@@ -689,12 +718,20 @@ export function SearchShell() {
       return [];
     }
 
-    if (concordanceGroupBy === "none") {
+    if (activeTab === "advanced" || concordanceGroupBy === "none") {
       return concordanceData.results;
     }
 
     return concordanceData.groups.flatMap((group) => group.occurrences);
-  }, [activeTab, concordanceData, concordanceGroupBy, dictionaryOccurrences, exploreResultType, searchData]);
+  }, [
+    activeTab,
+    advancedResultType,
+    concordanceData,
+    concordanceGroupBy,
+    dictionaryOccurrences,
+    exploreResultType,
+    searchData,
+  ]);
   const selectedResultIndex = useMemo(() => {
     if (!selectedResult) {
       return -1;
@@ -727,13 +764,24 @@ export function SearchShell() {
   const runExplore = useCallback(
     async (nextOffset = 0) => {
       if (exploreResultType === "matches") {
-        await runSearch(nextOffset);
+        await runSearch(nextOffset, undefined, searchMode);
         return;
       }
 
-      await runConcordance(nextOffset);
+      await runConcordance(nextOffset, undefined, searchMode);
     },
-    [exploreResultType, runConcordance, runSearch],
+    [exploreResultType, runConcordance, runSearch, searchMode],
+  );
+  const runAdvanced = useCallback(
+    async (nextOffset = 0) => {
+      if (advancedResultType === "matches") {
+        await runSearch(nextOffset, undefined, "morpheme");
+        return;
+      }
+
+      await runConcordance(nextOffset, undefined, "morpheme");
+    },
+    [advancedResultType, runConcordance, runSearch],
   );
 
   return (
@@ -786,8 +834,9 @@ export function SearchShell() {
           </CardHeader>
           <CardContent className="space-y-3">
             <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ActiveTab)}>
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="explore">Explore</TabsTrigger>
+                <TabsTrigger value="advanced">Advanced</TabsTrigger>
                 <TabsTrigger value="dictionary">Dictionary</TabsTrigger>
               </TabsList>
             </Tabs>
@@ -799,7 +848,7 @@ export function SearchShell() {
                     size="sm"
                     className="w-full justify-center"
                     onClick={() => void runExplore(0)}
-                    disabled={loading || (searchQuery.trim().length === 0 && !(searchMode === "morpheme" && hasMorphemeFilters))}
+                    disabled={loading || searchQuery.trim().length === 0}
                   >
                     {loading && <Loader2 className="size-4 animate-spin" />}
                     Run
@@ -830,7 +879,7 @@ export function SearchShell() {
                     />
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
-                    <Select value={searchMode} onValueChange={(value) => setSearchMode(value as SearchMode)}>
+                    <Select value={searchMode} onValueChange={(value) => setSearchMode(value as ExploreSearchMode)}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -859,7 +908,6 @@ export function SearchShell() {
                       <Select
                         value={concordanceGroupBy}
                         onValueChange={(value) => setConcordanceGroupBy(value as SearchGroupBy)}
-                        disabled={searchMode === "morpheme"}
                       >
                         <SelectTrigger>
                           <SelectValue />
@@ -874,60 +922,118 @@ export function SearchShell() {
                       </Select>
                     )}
                   </div>
-                  {searchMode === "morpheme" && (
-                    <div className="space-y-2 rounded-md border border-dashed p-2">
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <Select
-                          value={morphemeSegmentType}
-                          onValueChange={(value) => setMorphemeSegmentType(value as "all" | MorphemeSegmentType)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Segment type" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {MORPHEME_SEGMENT_OPTIONS.map((entry) => (
-                              <SelectItem key={entry.value} value={entry.value}>
-                                {entry.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          value={morphemePos}
-                          onChange={(event) => setMorphemePos(event.target.value)}
-                          placeholder="POS filter (e.g., V, N, PRON)"
-                        />
-                      </div>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        <Input
-                          value={morphemeLemma}
-                          onChange={(event) => setMorphemeLemma(event.target.value)}
-                          placeholder="Lemma filter"
-                        />
-                        <Input
-                          value={morphemeRoot}
-                          onChange={(event) => setMorphemeRoot(event.target.value)}
-                          placeholder="Root filter (e.g., كتب or ktb)"
-                        />
-                      </div>
-                      <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
-                        <Input
-                          value={morphemeFeature}
-                          onChange={(event) => setMorphemeFeature(event.target.value)}
-                          placeholder="Feature filter (e.g., IMPF, MOOD:JUS, POS:V)"
-                        />
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={!hasMorphemeFilters}
-                          onClick={resetMorphemeFilters}
-                        >
-                          Reset morpheme filters
-                        </Button>
-                      </div>
-                    </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "advanced" && (
+              <div className="space-y-2 rounded-md border p-3">
+                <div className="grid grid-cols-2 items-center gap-2">
+                  <Button
+                    size="sm"
+                    className="w-full justify-center"
+                    onClick={() => void runAdvanced(0)}
+                    disabled={loading || (searchQuery.trim().length === 0 && !hasMorphemeFilters)}
+                  >
+                    {loading && <Loader2 className="size-4 animate-spin" />}
+                    Run
+                  </Button>
+                  <Select value={advancedResultType} onValueChange={(value) => setAdvancedResultType(value as ExploreResultType)}>
+                    <SelectTrigger className="w-full min-w-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="matches">Matches</SelectItem>
+                      <SelectItem value="concordance">Concordance</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
+                    <Input
+                      className="pl-9"
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          void runAdvanced(0);
+                        }
+                      }}
+                      placeholder="Optional token query (or use filters only)..."
+                    />
+                  </div>
+                  {advancedResultType === "matches" ? (
+                    <Select value={searchSort} onValueChange={(value) => setSearchSort(value as SearchSort)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SORT_OPTIONS.map((entry) => (
+                          <SelectItem key={entry.value} value={entry.value}>
+                            {entry.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="rounded-md border border-dashed p-2 text-xs text-muted-foreground text-pretty">
+                      Concordance grouping is fixed to <span className="font-medium text-foreground">None</span> for
+                      morpheme mode.
+                    </p>
                   )}
+                  <div className="space-y-2 rounded-md border border-dashed p-2">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Select
+                        value={morphemeSegmentType}
+                        onValueChange={(value) => setMorphemeSegmentType(value as "all" | MorphemeSegmentType)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Segment type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {MORPHEME_SEGMENT_OPTIONS.map((entry) => (
+                            <SelectItem key={entry.value} value={entry.value}>
+                              {entry.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        value={morphemePos}
+                        onChange={(event) => setMorphemePos(event.target.value)}
+                        placeholder="POS filter (e.g., V, N, PRON)"
+                      />
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Input
+                        value={morphemeLemma}
+                        onChange={(event) => setMorphemeLemma(event.target.value)}
+                        placeholder="Lemma filter"
+                      />
+                      <Input
+                        value={morphemeRoot}
+                        onChange={(event) => setMorphemeRoot(event.target.value)}
+                        placeholder="Root filter (e.g., كتب or ktb)"
+                      />
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                      <Input
+                        value={morphemeFeature}
+                        onChange={(event) => setMorphemeFeature(event.target.value)}
+                        placeholder="Feature filter (e.g., IMPF, MOOD:JUS, POS:V)"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={!hasMorphemeFilters}
+                        onClick={resetMorphemeFilters}
+                      >
+                        Reset morpheme filters
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -1141,8 +1247,8 @@ export function SearchShell() {
             {showGuide && (
               <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
                 <p className="text-pretty">
-                  Search finds matching tokens. Dictionary opens one root/lemma entry. Concordance lists occurrences
-                  and contexts. Morpheme mode narrows matches to prefix/stem/suffix segments.
+                  Explore handles standard search and concordance. Advanced handles morpheme search with segment and
+                  feature filters. Dictionary opens one root/lemma entry.
                 </p>
                 <p className="mt-2 text-pretty">
                   Use chapter scope to narrow context. Use <span className="font-medium text-foreground">Exact</span>
@@ -1176,8 +1282,8 @@ export function SearchShell() {
           <CardHeader className="pb-4">
             <CardTitle className="text-base text-balance">Results</CardTitle>
             <CardDescription className="text-pretty">
-              {activeTab === "explore" &&
-                (exploreResultType === "matches"
+              {(activeTab === "explore" || activeTab === "advanced") &&
+                ((activeTab === "advanced" ? advancedResultType : exploreResultType) === "matches"
                   ? `${searchData?.total ?? 0} search matches`
                   : `${concordanceData?.totalOccurrences ?? 0} concordance matches`)}
               {activeTab === "dictionary" &&
@@ -1187,24 +1293,31 @@ export function SearchShell() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {activeTab === "explore" && exploreResultType === "matches" && searchData == null && !loading && (
+            {(activeTab === "explore" || activeTab === "advanced") &&
+              (activeTab === "advanced" ? advancedResultType : exploreResultType) === "matches" &&
+              searchData == null &&
+              !loading && (
               <p className="text-sm text-muted-foreground text-pretty">
-                Run a search query to load matching tokens and verses.
+                {activeTab === "advanced"
+                  ? "Run advanced morpheme search to load matching tokens and verses."
+                  : "Run a search query to load matching tokens and verses."}
               </p>
             )}
 
-            {activeTab === "explore" &&
-              exploreResultType === "matches" &&
+            {(activeTab === "explore" || activeTab === "advanced") &&
+              (activeTab === "advanced" ? advancedResultType : exploreResultType) === "matches" &&
               searchData != null &&
               searchData.results.length === 0 &&
               !loading && (
               <p className="text-sm text-muted-foreground text-pretty">
-                No search matches found. Try a different mode, chapter scope, or query.
+                {activeTab === "advanced"
+                  ? "No morpheme matches found. Adjust filters or query."
+                  : "No search matches found. Try a different mode, chapter scope, or query."}
               </p>
             )}
 
-            {activeTab === "explore" &&
-              exploreResultType === "matches" &&
+            {(activeTab === "explore" || activeTab === "advanced") &&
+              (activeTab === "advanced" ? advancedResultType : exploreResultType) === "matches" &&
               (searchData?.results ?? []).map((entry) => (
                 <ResultRow
                   key={entry.location.join(":")}
@@ -1255,17 +1368,20 @@ export function SearchShell() {
                       No dictionary results found for this entry and filter scope.
                     </p>
                   )}
-              </div>
+                </div>
             )}
 
-            {activeTab === "explore" && exploreResultType === "concordance" && (
+            {(activeTab === "explore" || activeTab === "advanced") &&
+              (activeTab === "advanced" ? advancedResultType : exploreResultType) === "concordance" && (
               <div className="space-y-3">
                 {!concordanceData && !loading && (
                   <p className="text-sm text-muted-foreground text-pretty">
-                    Run concordance to inspect all occurrences for a query.
+                    {activeTab === "advanced"
+                      ? "Run morpheme concordance to inspect filtered occurrences."
+                      : "Run concordance to inspect all occurrences for a query."}
                   </p>
                 )}
-                {concordanceGroupBy === "none"
+                {(activeTab === "advanced" || concordanceGroupBy === "none")
                   ? (concordanceData?.results ?? []).map((entry) => (
                       <ResultRow
                         key={entry.location.join(":")}
@@ -1307,12 +1423,20 @@ export function SearchShell() {
               </div>
             )}
 
-            {activeTab === "explore" && exploreResultType === "matches" && searchData != null && (
+            {(activeTab === "explore" || activeTab === "advanced") &&
+              (activeTab === "advanced" ? advancedResultType : exploreResultType) === "matches" &&
+              searchData != null && (
               <>
                 <Separator />
                 <Button
                   variant="outline"
-                  onClick={() => void runExplore(searchOffset + limit)}
+                  onClick={() => {
+                    if (activeTab === "advanced") {
+                      void runAdvanced(searchOffset + limit);
+                      return;
+                    }
+                    void runExplore(searchOffset + limit);
+                  }}
                   disabled={loading || !canLoadMoreSearch}
                 >
                   {canLoadMoreSearch ? "Load more search results" : "All search results loaded"}
