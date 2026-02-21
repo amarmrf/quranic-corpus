@@ -29,6 +29,7 @@ import type {
   DictionaryIndexEntry,
   DictionaryIndexType,
   DictionaryResponse,
+  MorphemeSegmentType,
   SearchGroupBy,
   SearchMode,
   SearchResult,
@@ -54,17 +55,18 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-type ActiveTab = "search" | "dictionary" | "concordance";
+type ActiveTab = "explore" | "dictionary";
+type ExploreResultType = "matches" | "concordance";
 
 const MODE_OPTIONS: { value: SearchMode; label: string }[] = [
   { value: "surface", label: "Surface/gloss" },
   { value: "lemma", label: "Lemma" },
   { value: "root", label: "Root" },
+  { value: "morpheme", label: "Morpheme" },
   { value: "translation", label: "Verse translation" },
 ];
 
 const DEFAULT_SEARCH_EXAMPLE = "adam";
-const DEFAULT_CONCORDANCE_EXAMPLE = "house";
 
 const SORT_OPTIONS: { value: SearchSort; label: string }[] = [
   { value: "relevance", label: "Relevance" },
@@ -77,8 +79,19 @@ const GROUP_BY_OPTIONS: { value: SearchGroupBy; label: string }[] = [
   { value: "root", label: "Root" },
 ];
 
+const MORPHEME_SEGMENT_OPTIONS: { value: "all" | MorphemeSegmentType; label: string }[] = [
+  { value: "all", label: "All segments" },
+  { value: "prefix", label: "Prefix" },
+  { value: "stem", label: "Stem" },
+  { value: "suffix", label: "Suffix" },
+];
+
 const ARABIC_LETTERS = ["all", "ا", "ب", "ت", "ث", "ج", "ح", "خ", "د", "ذ", "ر", "ز", "س", "ش", "ص", "ض", "ط", "ظ", "ع", "غ", "ف", "ق", "ك", "ل", "م", "ن", "ه", "و", "ي"] as const;
 const LINGUISTIC_TERMS: { term: string; description: string }[] = [
+  {
+    term: "Lexeme",
+    description: "Abstract vocabulary unit that groups related word forms under one lexical identity.",
+  },
   {
     term: "Lemma",
     description: "Dictionary headword for a word-form family (e.g., different inflections under one entry).",
@@ -96,8 +109,28 @@ const LINGUISTIC_TERMS: { term: string; description: string }[] = [
     description: "Short meaning hint used for quick reading before checking full translation context.",
   },
   {
+    term: "Morphology",
+    description: "Tag bundle describing a token's grammatical features such as case, gender, number, and form.",
+  },
+  {
+    term: "Morpheme",
+    description: "One minimal segment in a token (prefix, stem, or suffix) carrying grammatical meaning.",
+  },
+  {
     term: "POS",
     description: "Part of speech label such as noun, verb, particle, pronoun, and related categories.",
+  },
+  {
+    term: "Token",
+    description: "One word unit at a specific chapter:verse:token location in the corpus.",
+  },
+  {
+    term: "Match field",
+    description: "The indexed field that matched your query (e.g., gloss, lemma, root, or verse translation).",
+  },
+  {
+    term: "Verse translation",
+    description: "Full verse rendering from the selected translator used for context and translation-mode search.",
   },
   {
     term: "Concordance",
@@ -122,10 +155,10 @@ export function SearchShell() {
   const { theme, toggleTheme } = useTheme();
   const defaultSearchLoadedRef = useRef(false);
   const defaultDictionaryLoadedRef = useRef(false);
-  const defaultConcordanceLoadedRef = useRef(false);
   const [showGuide, setShowGuide] = useLocalStorage<boolean>("qc.search.show-guide", true);
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>("search");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("explore");
+  const [exploreResultType, setExploreResultType] = useState<ExploreResultType>("matches");
   const [translation, setTranslation] = useState<string>(
     urlSearchParams.get("translation") ?? "sahih-international",
   );
@@ -151,10 +184,16 @@ export function SearchShell() {
   const [dictionaryData, setDictionaryData] = useState<DictionaryResponse | null>(null);
   const [dictionaryOccurrences, setDictionaryOccurrences] = useState<ConcordanceResponse | null>(null);
 
-  const [concordanceQuery, setConcordanceQuery] = useState("");
-  const [concordanceMode, setConcordanceMode] = useState<SearchMode>("surface");
   const [concordanceGroupBy, setConcordanceGroupBy] = useState<SearchGroupBy>("none");
   const [concordanceData, setConcordanceData] = useState<ConcordanceResponse | null>(null);
+  const [morphemeSegmentType, setMorphemeSegmentType] = useState<"all" | MorphemeSegmentType>(() => {
+    const raw = urlSearchParams.get("segmentType");
+    return raw === "prefix" || raw === "stem" || raw === "suffix" ? raw : "all";
+  });
+  const [morphemePos, setMorphemePos] = useState(urlSearchParams.get("pos") ?? "");
+  const [morphemeLemma, setMorphemeLemma] = useState(urlSearchParams.get("lemma") ?? "");
+  const [morphemeRoot, setMorphemeRoot] = useState(urlSearchParams.get("root") ?? "");
+  const [morphemeFeature, setMorphemeFeature] = useState(urlSearchParams.get("feature") ?? "");
 
   const [translations, setTranslations] = useState<Translation[]>([]);
   const [metadataError, setMetadataError] = useState<string | null>(null);
@@ -188,13 +227,39 @@ export function SearchShell() {
     () => (chapter === "all" ? undefined : Number(chapter)),
     [chapter],
   );
+  const normalizeMorphemeRoot = useCallback((value: string) => value.trim().replace(/\s+/g, ""), []);
+  const morphemeParams = useMemo(() => {
+    const pos = morphemePos.trim();
+    const lemma = morphemeLemma.trim();
+    const root = normalizeMorphemeRoot(morphemeRoot);
+    const feature = morphemeFeature.trim();
+
+    return {
+      segmentType: morphemeSegmentType === "all" ? undefined : morphemeSegmentType,
+      pos: pos.length > 0 ? pos : undefined,
+      lemma: lemma.length > 0 ? lemma : undefined,
+      root: root.length > 0 ? root : undefined,
+      feature: feature.length > 0 ? feature : undefined,
+    };
+  }, [morphemeFeature, morphemeLemma, morphemePos, morphemeRoot, morphemeSegmentType, normalizeMorphemeRoot]);
+  const hasMorphemeFilters =
+    morphemeSegmentType !== "all" ||
+    morphemePos.trim().length > 0 ||
+    morphemeLemma.trim().length > 0 ||
+    normalizeMorphemeRoot(morphemeRoot).length > 0 ||
+    morphemeFeature.trim().length > 0;
 
   const runSearch = useCallback(
     async (nextOffset = 0, explicitQuery?: string, explicitMode?: SearchMode) => {
       const q = (explicitQuery ?? searchQuery).trim();
       const mode = explicitMode ?? searchMode;
-      if (q.length === 0) {
-        setError("Enter a query before searching.");
+      const allowFilterOnlyMorphemeQuery = mode === "morpheme" && hasMorphemeFilters;
+      if (q.length === 0 && !allowFilterOnlyMorphemeQuery) {
+        setError(
+          mode === "morpheme"
+            ? "Enter a query or set at least one morpheme filter."
+            : "Enter a query before searching.",
+        );
         return;
       }
 
@@ -208,6 +273,7 @@ export function SearchShell() {
           chapter: chapterNumber,
           exact,
           diacritics,
+          ...(mode === "morpheme" ? morphemeParams : {}),
           limit,
           offset: nextOffset,
           sort: searchSort,
@@ -221,9 +287,46 @@ export function SearchShell() {
         }
         setSearchOffset(nextOffset);
         const urlParams = new URLSearchParams(urlSearchParams);
-        urlParams.set("q", q);
+        if (q.length > 0) {
+          urlParams.set("q", q);
+        } else {
+          urlParams.delete("q");
+        }
         urlParams.set("mode", mode);
         urlParams.set("translation", translation);
+        if (mode === "morpheme") {
+          if (morphemeParams.segmentType) {
+            urlParams.set("segmentType", morphemeParams.segmentType);
+          } else {
+            urlParams.delete("segmentType");
+          }
+          if (morphemeParams.pos) {
+            urlParams.set("pos", morphemeParams.pos);
+          } else {
+            urlParams.delete("pos");
+          }
+          if (morphemeParams.lemma) {
+            urlParams.set("lemma", morphemeParams.lemma);
+          } else {
+            urlParams.delete("lemma");
+          }
+          if (morphemeParams.root) {
+            urlParams.set("root", morphemeParams.root);
+          } else {
+            urlParams.delete("root");
+          }
+          if (morphemeParams.feature) {
+            urlParams.set("feature", morphemeParams.feature);
+          } else {
+            urlParams.delete("feature");
+          }
+        } else {
+          urlParams.delete("segmentType");
+          urlParams.delete("pos");
+          urlParams.delete("lemma");
+          urlParams.delete("root");
+          urlParams.delete("feature");
+        }
         router.replace(`/search?${urlParams.toString()}`);
       } catch (requestError) {
         const message = requestError instanceof Error ? requestError.message : "Search request failed.";
@@ -236,7 +339,9 @@ export function SearchShell() {
       chapterNumber,
       diacritics,
       exact,
+      hasMorphemeFilters,
       limit,
+      morphemeParams,
       router,
       searchMode,
       searchQuery,
@@ -247,7 +352,7 @@ export function SearchShell() {
   );
 
   useEffect(() => {
-    if (activeTab !== "search") {
+    if (activeTab !== "explore") {
       return;
     }
 
@@ -263,6 +368,7 @@ export function SearchShell() {
       initialModeParam === "surface" ||
       initialModeParam === "lemma" ||
       initialModeParam === "root" ||
+      initialModeParam === "morpheme" ||
       initialModeParam === "translation"
         ? initialModeParam
         : "surface";
@@ -282,6 +388,13 @@ export function SearchShell() {
   const dictionaryStartsWithLabel =
     dictionaryStartsWith === "all" ? "All letters" : `Letter ${dictionaryStartsWith}`;
   const hasSharedFilters = exact || diacritics || chapter !== "all";
+  const resetMorphemeFilters = useCallback(() => {
+    setMorphemeSegmentType("all");
+    setMorphemePos("");
+    setMorphemeLemma("");
+    setMorphemeRoot("");
+    setMorphemeFeature("");
+  }, []);
   const normalizeDictionaryValue = useCallback(
     (value: string) => {
       const trimmed = value.trim();
@@ -387,10 +500,16 @@ export function SearchShell() {
     translation,
   ]);
 
-  const runConcordance = useCallback(async (explicitQuery?: string) => {
-    const q = (explicitQuery ?? concordanceQuery).trim();
-    if (q.length === 0) {
-      setError("Enter a concordance query.");
+  const runConcordance = useCallback(async (nextOffset = 0, explicitQuery?: string, explicitMode?: SearchMode) => {
+    const q = (explicitQuery ?? searchQuery).trim();
+    const mode = explicitMode ?? searchMode;
+    const allowFilterOnlyMorphemeQuery = mode === "morpheme" && hasMorphemeFilters;
+    if (q.length === 0 && !allowFilterOnlyMorphemeQuery) {
+      setError(
+        mode === "morpheme"
+          ? "Enter a query or set at least one morpheme filter."
+          : "Enter a concordance query.",
+      );
       return;
     }
 
@@ -400,16 +519,16 @@ export function SearchShell() {
       setConcordanceData(
         await getConcordance({
           q,
-          mode: concordanceMode,
+          mode,
           translation,
           chapter: chapterNumber,
           exact,
           diacritics,
-          limit: 120,
-          offset: 0,
+          ...(mode === "morpheme" ? morphemeParams : {}),
+          limit,
+          offset: nextOffset,
           sort: "location",
-          groupBy: concordanceGroupBy,
-          occurrenceLimit: 120,
+          groupBy: mode === "morpheme" ? "none" : concordanceGroupBy,
         }),
       );
     } catch (requestError) {
@@ -421,12 +540,34 @@ export function SearchShell() {
   }, [
     chapterNumber,
     concordanceGroupBy,
-    concordanceMode,
-    concordanceQuery,
     diacritics,
     exact,
+    hasMorphemeFilters,
+    limit,
+    morphemeParams,
+    searchMode,
+    searchQuery,
     translation,
   ]);
+
+  useEffect(() => {
+    if (searchMode === "morpheme" && concordanceGroupBy !== "none") {
+      setConcordanceGroupBy("none");
+    }
+  }, [concordanceGroupBy, searchMode]);
+
+  useEffect(() => {
+    if (activeTab !== "explore" || exploreResultType !== "concordance" || loading || concordanceData != null) {
+      return;
+    }
+
+    const queryToRun = searchQuery.trim().length > 0 ? searchQuery.trim() : DEFAULT_SEARCH_EXAMPLE;
+    if (searchQuery.trim().length === 0) {
+      setSearchQuery(queryToRun);
+    }
+
+    void runConcordance(0, queryToRun, searchMode);
+  }, [activeTab, concordanceData, exploreResultType, loading, runConcordance, searchMode, searchQuery]);
 
   useEffect(() => {
     if (activeTab !== "dictionary" || defaultDictionaryLoadedRef.current) {
@@ -440,16 +581,6 @@ export function SearchShell() {
     defaultDictionaryLoadedRef.current = true;
     void runDictionary(selectedDictionaryEntry);
   }, [activeTab, runDictionary, selectedDictionaryEntry]);
-
-  useEffect(() => {
-    if (activeTab !== "concordance" || defaultConcordanceLoadedRef.current) {
-      return;
-    }
-
-    defaultConcordanceLoadedRef.current = true;
-    setConcordanceQuery(DEFAULT_CONCORDANCE_EXAMPLE);
-    void runConcordance(DEFAULT_CONCORDANCE_EXAMPLE);
-  }, [activeTab, runConcordance]);
 
   useEffect(() => {
     if (!selectedResult) {
@@ -501,15 +632,29 @@ export function SearchShell() {
       .join("")
       .trim() || selectedResult?.tokenArabic || "";
   const analyzedPhonetic = analyzedToken?.phonetic || selectedResult?.phonetic || "";
-  const activeQueryText = useMemo(() => {
-    if (activeTab === "search") {
-      return searchData?.query.q;
+  const selectedTokenHighlightTerm = useMemo(() => {
+    if (!selectedResult) {
+      return undefined;
     }
+
+    return resolveTokenHighlightTerm(
+      selectedResult.verseTranslation ?? undefined,
+      selectedResult.gloss,
+      selectedResult.lemmas,
+    );
+  }, [selectedResult]);
+  const activeQueryText = useMemo(() => {
     if (activeTab === "dictionary") {
       return dictionaryOccurrences?.query.q;
     }
-    return concordanceData?.query.q;
-  }, [activeTab, concordanceData?.query.q, dictionaryOccurrences?.query.q, searchData?.query.q]);
+    return exploreResultType === "matches" ? searchData?.query.q : concordanceData?.query.q;
+  }, [
+    activeTab,
+    concordanceData?.query.q,
+    dictionaryOccurrences?.query.q,
+    exploreResultType,
+    searchData?.query.q,
+  ]);
   const selectedResultTranslationSnippet = useMemo(() => {
     if (!selectedResult?.verseTranslation) {
       return null;
@@ -525,19 +670,19 @@ export function SearchShell() {
     return getTranslationSnippet(
       selectedResult.verseTranslation,
       activeQueryText,
-      selectedResult.gloss,
+      selectedTokenHighlightTerm,
       false,
       matchedTokenIndex,
       verseArabicTokens.length,
     );
-  }, [activeQueryText, selectedResult]);
+  }, [activeQueryText, selectedResult, selectedTokenHighlightTerm]);
   const activeResults = useMemo<SearchResult[]>(() => {
-    if (activeTab === "search") {
-      return searchData?.results ?? [];
-    }
-
     if (activeTab === "dictionary") {
       return dictionaryOccurrences?.results ?? [];
+    }
+
+    if (exploreResultType === "matches") {
+      return searchData?.results ?? [];
     }
 
     if (!concordanceData) {
@@ -549,7 +694,7 @@ export function SearchShell() {
     }
 
     return concordanceData.groups.flatMap((group) => group.occurrences);
-  }, [activeTab, concordanceData, concordanceGroupBy, dictionaryOccurrences, searchData]);
+  }, [activeTab, concordanceData, concordanceGroupBy, dictionaryOccurrences, exploreResultType, searchData]);
   const selectedResultIndex = useMemo(() => {
     if (!selectedResult) {
       return -1;
@@ -579,6 +724,17 @@ export function SearchShell() {
       setSelectedResult(next);
     }
   }, [activeResults, canSelectNextResult, selectedResultIndex]);
+  const runExplore = useCallback(
+    async (nextOffset = 0) => {
+      if (exploreResultType === "matches") {
+        await runSearch(nextOffset);
+        return;
+      }
+
+      await runConcordance(nextOffset);
+    },
+    [exploreResultType, runConcordance, runSearch],
+  );
 
   return (
     <WorkbenchShell
@@ -630,24 +786,33 @@ export function SearchShell() {
           </CardHeader>
           <CardContent className="space-y-3">
             <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as ActiveTab)}>
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="search">Search</TabsTrigger>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="explore">Explore</TabsTrigger>
                 <TabsTrigger value="dictionary">Dictionary</TabsTrigger>
-                <TabsTrigger value="concordance">Concordance</TabsTrigger>
               </TabsList>
             </Tabs>
 
-            {activeTab === "search" && (
+            {activeTab === "explore" && (
               <div className="space-y-2 rounded-md border p-3">
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="grid grid-cols-2 items-center gap-2">
                   <Button
                     size="sm"
-                    onClick={() => void runSearch(0)}
-                    disabled={loading || searchQuery.trim().length === 0}
+                    className="w-full justify-center"
+                    onClick={() => void runExplore(0)}
+                    disabled={loading || (searchQuery.trim().length === 0 && !(searchMode === "morpheme" && hasMorphemeFilters))}
                   >
                     {loading && <Loader2 className="size-4 animate-spin" />}
-                    Run search
+                    Run
                   </Button>
+                  <Select value={exploreResultType} onValueChange={(value) => setExploreResultType(value as ExploreResultType)}>
+                    <SelectTrigger className="w-full min-w-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="matches">Matches</SelectItem>
+                      <SelectItem value="concordance">Concordance</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid gap-2">
                   <div className="relative">
@@ -658,7 +823,7 @@ export function SearchShell() {
                       onChange={(event) => setSearchQuery(event.target.value)}
                       onKeyDown={(event) => {
                         if (event.key === "Enter") {
-                          void runSearch(0);
+                          void runExplore(0);
                         }
                       }}
                       placeholder="house, mercy, justice..."
@@ -677,19 +842,92 @@ export function SearchShell() {
                         ))}
                       </SelectContent>
                     </Select>
-                    <Select value={searchSort} onValueChange={(value) => setSearchSort(value as SearchSort)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {SORT_OPTIONS.map((entry) => (
-                          <SelectItem key={entry.value} value={entry.value}>
-                            {entry.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {exploreResultType === "matches" ? (
+                      <Select value={searchSort} onValueChange={(value) => setSearchSort(value as SearchSort)}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SORT_OPTIONS.map((entry) => (
+                            <SelectItem key={entry.value} value={entry.value}>
+                              {entry.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Select
+                        value={concordanceGroupBy}
+                        onValueChange={(value) => setConcordanceGroupBy(value as SearchGroupBy)}
+                        disabled={searchMode === "morpheme"}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {GROUP_BY_OPTIONS.map((entry) => (
+                            <SelectItem key={entry.value} value={entry.value}>
+                              {entry.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
+                  {searchMode === "morpheme" && (
+                    <div className="space-y-2 rounded-md border border-dashed p-2">
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <Select
+                          value={morphemeSegmentType}
+                          onValueChange={(value) => setMorphemeSegmentType(value as "all" | MorphemeSegmentType)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Segment type" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {MORPHEME_SEGMENT_OPTIONS.map((entry) => (
+                              <SelectItem key={entry.value} value={entry.value}>
+                                {entry.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          value={morphemePos}
+                          onChange={(event) => setMorphemePos(event.target.value)}
+                          placeholder="POS filter (e.g., V, N, PRON)"
+                        />
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <Input
+                          value={morphemeLemma}
+                          onChange={(event) => setMorphemeLemma(event.target.value)}
+                          placeholder="Lemma filter"
+                        />
+                        <Input
+                          value={morphemeRoot}
+                          onChange={(event) => setMorphemeRoot(event.target.value)}
+                          placeholder="Root filter (e.g., كتب or ktb)"
+                        />
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+                        <Input
+                          value={morphemeFeature}
+                          onChange={(event) => setMorphemeFeature(event.target.value)}
+                          placeholder="Feature filter (e.g., IMPF, MOOD:JUS, POS:V)"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={!hasMorphemeFilters}
+                          onClick={resetMorphemeFilters}
+                        >
+                          Reset morpheme filters
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -817,62 +1055,6 @@ export function SearchShell() {
               </div>
             )}
 
-            {activeTab === "concordance" && (
-              <div className="space-y-2 rounded-md border p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() => void runConcordance()}
-                    disabled={loading || concordanceQuery.trim().length === 0}
-                  >
-                    {loading && <Loader2 className="size-4 animate-spin" />}
-                    Run concordance
-                  </Button>
-                </div>
-                <div className="grid gap-2">
-                  <Input
-                    value={concordanceQuery}
-                    onChange={(event) => setConcordanceQuery(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        void runConcordance();
-                      }
-                    }}
-                    placeholder="Enter concordance query"
-                  />
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <Select value={concordanceMode} onValueChange={(value) => setConcordanceMode(value as SearchMode)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {MODE_OPTIONS.map((entry) => (
-                          <SelectItem key={entry.value} value={entry.value}>
-                            {entry.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={concordanceGroupBy}
-                      onValueChange={(value) => setConcordanceGroupBy(value as SearchGroupBy)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {GROUP_BY_OPTIONS.map((entry) => (
-                          <SelectItem key={entry.value} value={entry.value}>
-                            {entry.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-            )}
-
             <div className="space-y-2 rounded-md border p-3">
               <p className="text-xs text-muted-foreground">Scope and output</p>
               <div className="grid gap-2">
@@ -960,7 +1142,7 @@ export function SearchShell() {
               <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
                 <p className="text-pretty">
                   Search finds matching tokens. Dictionary opens one root/lemma entry. Concordance lists occurrences
-                  and contexts.
+                  and contexts. Morpheme mode narrows matches to prefix/stem/suffix segments.
                 </p>
                 <p className="mt-2 text-pretty">
                   Use chapter scope to narrow context. Use <span className="font-medium text-foreground">Exact</span>
@@ -994,29 +1176,35 @@ export function SearchShell() {
           <CardHeader className="pb-4">
             <CardTitle className="text-base text-balance">Results</CardTitle>
             <CardDescription className="text-pretty">
-              {activeTab === "search" && `${searchData?.total ?? 0} search matches`}
+              {activeTab === "explore" &&
+                (exploreResultType === "matches"
+                  ? `${searchData?.total ?? 0} search matches`
+                  : `${concordanceData?.totalOccurrences ?? 0} concordance matches`)}
               {activeTab === "dictionary" &&
                 `${dictionaryData?.totalEntries ?? 0} entry groups / ${
                   dictionaryOccurrences?.totalOccurrences ?? 0
                 } occurrences`}
-              {activeTab === "concordance" &&
-                `${concordanceData?.totalOccurrences ?? 0} concordance matches`}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            {activeTab === "search" && searchData == null && !loading && (
+            {activeTab === "explore" && exploreResultType === "matches" && searchData == null && !loading && (
               <p className="text-sm text-muted-foreground text-pretty">
                 Run a search query to load matching tokens and verses.
               </p>
             )}
 
-            {activeTab === "search" && searchData != null && searchData.results.length === 0 && !loading && (
+            {activeTab === "explore" &&
+              exploreResultType === "matches" &&
+              searchData != null &&
+              searchData.results.length === 0 &&
+              !loading && (
               <p className="text-sm text-muted-foreground text-pretty">
                 No search matches found. Try a different mode, chapter scope, or query.
               </p>
             )}
 
-            {activeTab === "search" &&
+            {activeTab === "explore" &&
+              exploreResultType === "matches" &&
               (searchData?.results ?? []).map((entry) => (
                 <ResultRow
                   key={entry.location.join(":")}
@@ -1070,8 +1258,8 @@ export function SearchShell() {
               </div>
             )}
 
-            {activeTab === "concordance" && (
-              <div className="space-y-2">
+            {activeTab === "explore" && exploreResultType === "concordance" && (
+              <div className="space-y-3">
                 {!concordanceData && !loading && (
                   <p className="text-sm text-muted-foreground text-pretty">
                     Run concordance to inspect all occurrences for a query.
@@ -1119,12 +1307,12 @@ export function SearchShell() {
               </div>
             )}
 
-            {activeTab === "search" && searchData != null && (
+            {activeTab === "explore" && exploreResultType === "matches" && searchData != null && (
               <>
                 <Separator />
                 <Button
                   variant="outline"
-                  onClick={() => void runSearch(searchOffset + limit)}
+                  onClick={() => void runExplore(searchOffset + limit)}
                   disabled={loading || !canLoadMoreSearch}
                 >
                   {canLoadMoreSearch ? "Load more search results" : "All search results loaded"}
@@ -1205,7 +1393,7 @@ export function SearchShell() {
                   )}
                   {selectedResultTranslationSnippet && (
                     <p className="text-xs text-foreground/70 text-pretty">
-                      {highlightTranslation(selectedResultTranslationSnippet, activeQueryText, selectedResult.gloss)}
+                      {highlightTranslation(selectedResultTranslationSnippet, activeQueryText, selectedTokenHighlightTerm)}
                     </p>
                   )}
                 </div>
@@ -1272,6 +1460,20 @@ export function SearchShell() {
                   <span className="text-foreground/70">Match field</span>
                   <Badge variant="outline">{selectedResult.matchField}</Badge>
                 </div>
+                {selectedResult.matchedMorphemeTag && (
+                  <div className="space-y-1">
+                    <p className="text-foreground/70">Matched morpheme</p>
+                    <p className="text-xs text-pretty">
+                      {selectedResult.matchedSegmentType != null
+                        ? `${selectedResult.matchedSegmentType.toUpperCase()}`
+                        : "SEGMENT"}
+                      {selectedResult.matchedSegmentArabic
+                        ? ` (${selectedResult.matchedSegmentArabic})`
+                        : ""}
+                      : {selectedResult.matchedMorphemeTag}
+                    </p>
+                  </div>
+                )}
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-foreground/70">POS tags</span>
                   <span className="text-right">{selectedResult.posTags.join(", ") || "-"}</span>
@@ -1347,7 +1549,11 @@ function ResultRow({
   const matchedTokenIndex = hasArabicContext
     ? Math.min(Math.max(rawMatchedTokenIndex, 0), verseArabicTokens.length - 1)
     : 0;
-  const tokenGloss = entry.verseTranslation ? entry.gloss : undefined;
+  const tokenGloss = resolveTokenHighlightTerm(
+    entry.verseTranslation ?? undefined,
+    entry.gloss,
+    entry.lemmas,
+  );
   const translationLine = entry.verseTranslation
     ? getTranslationSnippet(
         entry.verseTranslation,
@@ -1436,6 +1642,12 @@ function ResultRow({
       <p className="mt-2 text-sm text-foreground/85 text-pretty">
         {highlightTranslation(translationLine, queryText, tokenGloss)}
       </p>
+      {entry.matchedMorphemeTag && (
+        <p className="mt-1 text-xs text-muted-foreground text-pretty">
+          Matched morpheme ({entry.matchedSegmentType ?? "segment"}
+          {entry.matchedSegmentArabic ? `: ${entry.matchedSegmentArabic}` : ""}): {entry.matchedMorphemeTag}
+        </p>
+      )}
       {showMorphology && (
         <div className="mt-2 space-y-1">
           <p className="text-xs text-muted-foreground">POS: {entry.posTags.join(", ") || "-"}</p>
@@ -1450,14 +1662,151 @@ function ResultRow({
   );
 }
 
+const COMMON_GLOSS_STOPWORDS = new Set([
+  "a",
+  "an",
+  "the",
+  "and",
+  "or",
+  "of",
+  "to",
+  "for",
+  "in",
+  "on",
+  "at",
+  "by",
+  "with",
+  "from",
+  "is",
+  "are",
+  "be",
+  "was",
+  "were",
+  "their",
+  "his",
+  "her",
+  "its",
+  "our",
+  "your",
+  "my",
+  "him",
+  "them",
+  "he",
+  "she",
+  "it",
+  "we",
+  "you",
+  "i",
+]);
+
+const GLOSS_ALIASES: Record<string, string[]> = {
+  god: ["Allah"],
+  lord: ["Allah"],
+  allah: ["God"],
+};
+
+function resolveTokenHighlightTerm(
+  verseTranslation: string | undefined,
+  gloss: string | undefined,
+  lemmas: Array<{ key: string }>,
+): string | undefined {
+  const normalizedGloss = normalizeCandidate(gloss);
+  if (!normalizedGloss) {
+    return undefined;
+  }
+
+  if (!verseTranslation || verseTranslation.length === 0) {
+    return normalizedGloss;
+  }
+
+  const lemmaKeys = new Set(lemmas.map((lemma) => lemma.key.toLowerCase()));
+  const candidates = buildGlossCandidates(normalizedGloss, lemmaKeys);
+
+  for (const candidate of candidates) {
+    if (indexOfIgnoreCase(verseTranslation, candidate) >= 0) {
+      return candidate;
+    }
+  }
+
+  return undefined;
+}
+
+function buildGlossCandidates(gloss: string, lemmaKeys: Set<string>): string[] {
+  const candidates: string[] = [];
+  const seenCandidates = new Set<string>();
+
+  const addCandidate = (candidate: string | undefined) => {
+    const normalized = normalizeCandidate(candidate);
+    if (!normalized) {
+      return;
+    }
+    const dedupeKey = normalized.toLowerCase();
+    if (seenCandidates.has(dedupeKey)) {
+      return;
+    }
+    seenCandidates.add(dedupeKey);
+    candidates.push(normalized);
+  };
+
+  const bracketCharsRemoved = gloss.replace(/[\[\]{}()]/g, " ");
+  const bracketedSegmentsRemoved = gloss.replace(/\[[^\]]*]|\([^)]*\)|\{[^}]*\}/g, " ");
+  const baseForms = [gloss, bracketCharsRemoved, bracketedSegmentsRemoved];
+
+  for (const form of baseForms) {
+    addCandidate(form);
+  }
+
+  const lexicalWords = new Set<string>();
+  for (const form of baseForms) {
+    const words = form.match(/[A-Za-z][A-Za-z'-]*/g) ?? [];
+    for (const word of words) {
+      const lowerWord = word.toLowerCase();
+      if (COMMON_GLOSS_STOPWORDS.has(lowerWord)) {
+        continue;
+      }
+      lexicalWords.add(word);
+      for (const alias of GLOSS_ALIASES[lowerWord] ?? []) {
+        lexicalWords.add(alias);
+      }
+    }
+  }
+
+  const sortedWords = Array.from(lexicalWords).sort((left, right) => right.length - left.length);
+  for (const word of sortedWords) {
+    addCandidate(word);
+  }
+
+  const expansionBases = sortedWords.length > 0 ? sortedWords.slice(0, 2) : [gloss];
+  if (lemmaKeys.has("yaa")) {
+    for (const base of expansionBases) {
+      addCandidate(`O ${base}`);
+    }
+  }
+  if (lemmaKeys.has("l")) {
+    for (const base of expansionBases) {
+      addCandidate(`to ${base}`);
+      addCandidate(`for ${base}`);
+    }
+  }
+
+  return candidates;
+}
+
+function normalizeCandidate(candidate: string | undefined): string | undefined {
+  const normalized = candidate?.replace(/\s+/g, " ").trim();
+  if (!normalized || normalized.length < 2) {
+    return undefined;
+  }
+  return normalized;
+}
+
 function highlightWithTerm(value: string, term: string | undefined, keyPrefix: string): ReactNode | null {
   const normalizedTerm = term?.trim();
   if (!normalizedTerm || normalizedTerm.length < 2) {
     return null;
   }
 
-  const escapedTerm = normalizedTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const matcher = new RegExp(`(${escapedTerm})`, "ig");
+  const matcher = buildLoosePhraseMatcher(normalizedTerm);
   const parts = value.split(matcher);
 
   if (parts.length <= 1) {
@@ -1545,25 +1894,35 @@ function getTranslationFocusTerm(
 }
 
 function indexOfIgnoreCase(value: string, needle: string): number {
-  return value.toLowerCase().indexOf(needle.toLowerCase());
+  const matcher = buildLoosePhraseMatcher(needle);
+  const match = matcher.exec(value);
+  return match?.index ?? -1;
 }
 
 function getMatchIndicesIgnoreCase(value: string, needle: string): number[] {
-  const source = value.toLowerCase();
-  const term = needle.toLowerCase();
+  const matcher = buildLoosePhraseMatcher(needle);
   const indices: number[] = [];
-  let searchStart = 0;
+  let match: RegExpExecArray | null;
 
-  while (searchStart < source.length) {
-    const index = source.indexOf(term, searchStart);
-    if (index < 0) {
-      break;
-    }
-    indices.push(index);
-    searchStart = index + Math.max(1, term.length);
+  while ((match = matcher.exec(value)) !== null) {
+    indices.push(match.index);
   }
 
   return indices;
+}
+
+function buildLoosePhraseMatcher(phrase: string): RegExp {
+  const terms = phrase
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((entry) => escapeRegex(entry));
+  const pattern = terms.length > 0 ? terms.join("\\s+") : escapeRegex(phrase);
+  return new RegExp(`(${pattern})`, "ig");
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function getClosestIndexByRatio(

@@ -92,9 +92,10 @@ export type Metadata = {
   translations: Translation[];
 };
 
-export type SearchMode = "surface" | "lemma" | "root" | "translation";
+export type SearchMode = "surface" | "lemma" | "root" | "translation" | "morpheme";
 export type SearchSort = "relevance" | "location";
 export type SearchGroupBy = "none" | "lemma" | "root";
+export type MorphemeSegmentType = "prefix" | "stem" | "suffix";
 
 export type LexemeRef = {
   key: string;
@@ -114,6 +115,11 @@ export type SearchQuery = {
   offset: number;
   sort: SearchSort;
   groupBy: SearchGroupBy;
+  segmentType: MorphemeSegmentType | null;
+  pos: string | null;
+  lemma: string | null;
+  root: string | null;
+  feature: string | null;
 };
 
 export type SearchResult = {
@@ -130,6 +136,10 @@ export type SearchResult = {
   morphology: string[];
   verseTranslation: string | null;
   matchField: string;
+  matchedSegmentIndex: number | null;
+  matchedSegmentType: MorphemeSegmentType | null;
+  matchedSegmentArabic: string | null;
+  matchedMorphemeTag: string | null;
 };
 
 export type SearchResponse = {
@@ -188,6 +198,11 @@ export type SearchRequest = {
   offset?: number;
   sort?: SearchSort;
   groupBy?: SearchGroupBy;
+  segmentType?: MorphemeSegmentType;
+  pos?: string;
+  lemma?: string;
+  root?: string;
+  feature?: string;
 };
 
 export type ConcordanceRequest = SearchRequest & {
