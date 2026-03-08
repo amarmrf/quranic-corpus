@@ -99,7 +99,10 @@ export const Treebank = () => {
                     <SyntaxGraphView syntaxGraph={syntaxGraph} />
                     {
                         syntaxGraph.legacyCorpusGraphNumber > 0 &&
-                        <img className='legacy-graph' src={`https://corpus.quran.com/graphimage?id=${syntaxGraph.legacyCorpusGraphNumber}`} />
+                        <img
+                            className='legacy-graph'
+                            src={`https://corpus.quran.com/graphimage?id=${syntaxGraph.legacyCorpusGraphNumber}`}
+                            alt={`Legacy syntax graph ${syntaxGraph.legacyCorpusGraphNumber}`} />
                     }
                 </>
             }

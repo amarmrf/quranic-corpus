@@ -52,10 +52,10 @@ export const Home = () => {
             </p>
             <div className='projects'>
                 <a href='https://join.slack.com/t/quraniccorpus/shared_invite/zt-1zp5zdz5w-b7hbwYPlZABDMm19ZeKWdA'>
-                    <img src={slack} />
+                    <img src={slack} alt='Join the Quranic Arabic Corpus Slack workspace' />
                 </a>
                 <a href='https://github.com/kaisdukes/quranic-corpus'>
-                    <img src={github} />
+                    <img src={github} alt='View the Quranic Arabic Corpus GitHub repository' />
                 </a>
             </div>
             <Footer />

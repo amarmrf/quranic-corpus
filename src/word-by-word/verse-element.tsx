@@ -26,7 +26,11 @@ export const VerseElement = ({ verse }: Props) => {
         <div id={getVerseId(location)} className='verse-element'>
             <div className='verse-header'>
                 <span className='verse-number'>{location[1]}</span>
-                <IconButton className='copy-button' icon={copy} onClick={handleCopy} />
+                <IconButton
+                    className='copy-button'
+                    icon={copy}
+                    alt='Copy verse'
+                    onClick={handleCopy} />
             </div>
             <div className='verse-tokens'>
                 {verseMark === 'section' && <SectionMark />}

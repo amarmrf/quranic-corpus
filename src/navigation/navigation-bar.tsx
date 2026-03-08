@@ -43,7 +43,7 @@ export const NavigationBar = ({ chapterNumber }: NavigationProps) => {
                     popupRef={hamburgerPopupRef}
                     showPopup={showHamburgerPopup}
                     onShowPopup={setShowHamburgerPopup}>
-                    <img src={hamburger} />
+                    <img src={hamburger} alt='Open menu' />
                 </PopupLink>
             </header>
             {progress && <IndeterminateProgressBar />}

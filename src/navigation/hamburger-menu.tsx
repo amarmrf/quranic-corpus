@@ -41,7 +41,7 @@ export const HamburgerMenu = ({ onClose }: Props) => {
         <div className='hamburger-menu'>
             <a href='#' onClick={toggleReaderMode}>
                 <div className='icon-container'>
-                    <img src={read} />
+                    <img src={read} alt='' />
                 </div>
                 {readerMode ? 'Detail mode' : 'Reader mode'}
             </a>
@@ -54,7 +54,7 @@ export const HamburgerMenu = ({ onClose }: Props) => {
                             <div className='icon-container'>
                                 {
                                     settingsService.hasTranslation(key) &&
-                                    <img src={tick} />
+                                    <img src={tick} alt='' />
                                 }
                             </div>
                             {name}
